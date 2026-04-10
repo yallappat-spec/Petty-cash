@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Petty Cash Manager</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+</head>
+<body>
+
+<!-- ── Page Loader ── -->
+<div id="pageLoader">
+  <div class="loader-spinner"></div>
+  <div class="loader-text">Connecting to Google Sheets…</div>
+</div>
+
+<!-- ── Config-not-set Banner ── -->
+<div id="configBanner">
+  <div class="config-box">
+    <div style="font-size:36px;margin-bottom:12px">⚙️</div>
+    <h2>Setup Required</h2>
+    <p>The app is not connected to Google Sheets yet. Follow these steps:</p>
+    <ol>
+      <li>Open <strong>Google Drive</strong> → create a new Google Sheet.</li>
+      <li>In the Sheet, click <strong>Extensions → Apps Script</strong>.</li>
+      <li>Delete any existing code and paste the contents of <code>Code.gs</code>.</li>
+      <li>Click <strong>Deploy → New Deployment → Web App</strong>.<br>
+          Set <em>Execute as: Me</em> &nbsp;|&nbsp; <em>Who has access: Anyone</em>.</li>
+      <li>Copy the <strong>Web App URL</strong>.</li>
+      <li>Open <code>config.js</code> in this project folder and replace<br>
+          <code>PASTE_YOUR_APPS_SCRIPT_URL_HERE</code> with the URL.</li>
+      <li>Reload this page.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ── Error Banner ── -->
+<div id="errorBanner" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 18px;margin:16px 28px;align-items:center;gap:10px;font-size:13.5px;color:#dc2626">
+  <i class="fas fa-triangle-exclamation"></i>
+  <span class="error-msg"></span>
+  <button class="btn-refresh ms-auto" onclick="location.reload()"><i class="fas fa-rotate-right"></i> Retry</button>
+</div>
+
+<button class="sidebar-toggle" onclick="App.toggleSidebar()"><i class="fas fa-bars"></i></button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="App.toggleSidebar()"></div>
+
+<!-- ── Sidebar ── -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand d-flex align-items-center">
+    <span class="brand-icon"><i class="fas fa-wallet"></i></span>
+    <div>
+      <div class="brand-name">Petty Cash</div>
+      <div class="brand-sub" id="deptName">Department Manager</div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Main</div>
+    <a href="index.html"        class="nav-link"><span class="nav-icon"><i class="fas fa-gauge"></i></span> Dashboard</a>
+    <a href="transactions.html" class="nav-link"><span class="nav-icon"><i class="fas fa-plus-circle"></i></span> Add Transaction</a>
+    <a href="approvals.html"    class="nav-link"><span class="nav-icon"><i class="fas fa-check-circle"></i></span> Approvals <span class="nav-badge d-none" id="pendingBadge">0</span></a>
+    <a href="reports.html"      class="nav-link"><span class="nav-icon"><i class="fas fa-chart-bar"></i></span> Reports</a>
+    <div class="nav-section-label mt-3">Settings</div>
+    <a href="#" class="nav-link" onclick="openSettings(); return false;"><span class="nav-icon"><i class="fas fa-gear"></i></span> Settings</a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="version">v2.0 &nbsp;·&nbsp; Google Sheets backend</div>
+  </div>
+</aside>
+
+<!-- ── Main Content ── -->
+<main class="main-content">
+
+  <div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div>
+      <h1><i class="fas fa-gauge me-2 text-primary"></i>Dashboard</h1>
+      <div class="subtitle" id="todayLabel"></div>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+      <button class="btn-refresh" onclick="doRefresh()" title="Refresh data from Google Sheets">
+        <i class="fas fa-rotate-right" id="refreshIcon"></i> Refresh
+      </button>
+      <a href="transactions.html" class="btn btn-primary"><i class="fas fa-plus"></i> Add Transaction</a>
+      <a href="approvals.html" class="btn btn-outline" id="reviewBtn" style="display:none">
+        <i class="fas fa-check"></i> Review (<span id="reviewCount">0</span>)
+      </a>
+    </div>
+  </div>
+
+  <!-- Stat Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-wallet"></i></div>
+        <div><div class="stat-label">Current Balance</div><div class="stat-value" id="statBalance">—</div></div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card">
+        <div class="stat-icon orange"><i class="fas fa-clock"></i></div>
+        <div><div class="stat-label">Pending Approvals</div><div class="stat-value" id="statPending">—</div></div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card">
+        <div class="stat-icon red"><i class="fas fa-arrow-trend-up"></i></div>
+        <div><div class="stat-label">This Month Expenses</div><div class="stat-value" id="statMonthly">—</div></div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-rotate"></i></div>
+        <div><div class="stat-label">This Month Replenished</div><div class="stat-value" id="statReplenish">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Transactions -->
+  <div class="table-wrapper">
+    <div class="table-toolbar">
+      <span class="table-title">Recent Transactions</span>
+      <a href="transactions.html" class="btn btn-outline btn-sm">View All <i class="fas fa-arrow-right ms-1"></i></a>
+    </div>
+    <div id="recentTableWrap" style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th><th>Type</th><th>Category</th><th>Description</th>
+            <th>Submitted By</th><th>Amount</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="recentTbody"></tbody>
+      </table>
+    </div>
+    <div id="recentEmpty" class="empty-state d-none">
+      <div class="empty-icon"><i class="fas fa-inbox"></i></div>
+      <p>No transactions yet. <a href="transactions.html">Add one now.</a></p>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── Toast ── -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="appToast" class="toast">
+    <div class="d-flex align-items-center gap-2 p-3">
+      <i class="fas fa-check-circle"></i>
+      <span id="toastMsg"></span>
+      <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Setup Modal ── -->
+<div class="modal fade" id="setupModal" data-bs-backdrop="static" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-wallet text-primary me-2"></i>Welcome! Set Opening Balance</h5>
+      </div>
+      <div class="modal-body p-4">
+        <p class="text-muted mb-3" style="font-size:14px">Enter the current amount physically available in your petty cash fund. You can adjust this later in Settings.</p>
+        <label class="form-label">Opening Balance (₹)</label>
+        <div class="input-group">
+          <span class="input-group-text">₹</span>
+          <input type="number" class="form-control" id="setupBalance" placeholder="e.g. 5000" min="0" step="0.01" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary w-100" onclick="completeSetup()">
+          <i class="fas fa-check me-2"></i>Start Managing
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Settings Modal ── -->
+<div class="modal fade" id="settingsModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-gear text-primary me-2"></i>Settings</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="mb-3">
+          <label class="form-label">Department Name</label>
+          <input type="text" class="form-control" id="settingsDept" maxlength="60" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Opening / Initial Balance (₹)</label>
+          <div class="input-group">
+            <span class="input-group-text">₹</span>
+            <input type="number" class="form-control" id="settingsBalance" min="0" step="0.01" />
+          </div>
+          <div class="form-text">Starting fund before any transactions.</div>
+        </div>
+        <hr />
+        <div class="fw-semibold mb-2" style="font-size:13px">Google Sheets Link</div>
+        <a id="sheetLink" href="#" target="_blank" class="btn btn-outline btn-sm" style="display:none">
+          <i class="fas fa-table-cells me-1"></i>Open Backup Sheet
+        </a>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="saveSettings()" id="saveSettingsBtn">
+          <i class="fas fa-save me-1"></i>Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+  App.setActiveNav();
+
+  document.getElementById('todayLabel').textContent =
+    new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  // ── Bootstrap page ─────────────────────────────────────────
+  (async () => {
+    App.showLoader('Connecting to Google Sheets…');
+    try {
+      await DataManager.init();
+      App.hideLoader();
+
+      if (DataManager._noConfig) { App.showConfigBanner(); return; }
+
+      if (!DataManager.isSetupDone()) {
+        App.showModal('setupModal');
+      }
+      renderDashboard();
+
+    } catch (e) {
+      App.hideLoader();
+      App.showError('Could not load data: ' + e.message);
+    }
+  })();
+
+  // Auto-refresh when tab regains focus (multi-user freshness)
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !DataManager._noConfig) doRefresh();
+  });
+
+  // ── Render ────────────────────────────────────────────────
+  function renderDashboard() {
+    const balance = DataManager.getBalance();
+    const pending = DataManager.getPendingCount();
+    const monthly = DataManager.getMonthlyStats();
+    const txs     = DataManager.getData().transactions;
+    const dept    = DataManager.getData().fund.departmentName || CONFIG.DEPARTMENT_NAME;
+
+    document.getElementById('deptName').textContent = dept;
+
+    const balEl = document.getElementById('statBalance');
+    balEl.textContent = App.fmt(balance);
+    balEl.className   = 'stat-value ' + (balance < 500 ? 'balance-low' : 'balance-ok');
+    document.getElementById('statPending').textContent   = pending;
+    document.getElementById('statMonthly').textContent   = App.fmt(monthly.expenses);
+    document.getElementById('statReplenish').textContent = App.fmt(monthly.replenishments);
+
+    // Review button
+    const revBtn = document.getElementById('reviewBtn');
+    revBtn.style.display = pending > 0 ? '' : 'none';
+    document.getElementById('reviewCount').textContent = pending;
+    App.updatePendingBadge();
+
+    // Recent rows
+    const recent = txs.slice(0, 10);
+    const tbody  = document.getElementById('recentTbody');
+    const empty  = document.getElementById('recentEmpty');
+    const wrap   = document.getElementById('recentTableWrap');
+
+    if (!recent.length) {
+      wrap.style.display = 'none'; empty.classList.remove('d-none'); return;
+    }
+    wrap.style.display = ''; empty.classList.add('d-none');
+
+    tbody.innerHTML = recent.map(t => `
+      <tr>
+        <td style="white-space:nowrap">${App.fmtDate(t.date)}</td>
+        <td>${App.typeBadge(t.type)}</td>
+        <td style="font-size:13px">${t.category}</td>
+        <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.description}">${t.description}</td>
+        <td class="text-muted fs-sm">${t.submittedBy || '—'}</td>
+        <td class="${t.type==='expense'?'amount-expense':'amount-replenish'}" style="white-space:nowrap">
+          ${t.type==='expense'?'−':'+'}${App.fmt(t.amount)}
+        </td>
+        <td>${App.statusBadge(t.status)}</td>
+      </tr>`).join('');
+  }
+
+  // ── Refresh ───────────────────────────────────────────────
+  async function doRefresh() {
+    const icon = document.getElementById('refreshIcon');
+    icon.classList.add('fa-spin');
+    try {
+      await DataManager.refresh();
+      renderDashboard();
+    } catch (e) {
+      App.toast('Refresh failed: ' + e.message, 'error');
+    } finally {
+      icon.classList.remove('fa-spin');
+    }
+  }
+
+  // ── Setup ─────────────────────────────────────────────────
+  async function completeSetup() {
+    const val = parseFloat(document.getElementById('setupBalance').value);
+    if (isNaN(val) || val < 0) {
+      document.getElementById('setupBalance').classList.add('is-invalid'); return;
+    }
+    const btn = document.querySelector('#setupModal .btn-primary');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving…';
+    try {
+      await DataManager.completeSetup(val);
+      App.hideModal('setupModal');
+      renderDashboard();
+      App.toast('Fund set up successfully!');
+    } catch (e) {
+      App.toast('Error: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-check me-2"></i>Start Managing';
+    }
+  }
+
+  // ── Settings ──────────────────────────────────────────────
+  function openSettings() {
+    const fund = DataManager.getData()?.fund || {};
+    document.getElementById('settingsBalance').value = fund.initialBalance || 0;
+    document.getElementById('settingsDept').value    = fund.departmentName || CONFIG.DEPARTMENT_NAME || '';
+    App.showModal('settingsModal');
+  }
+
+  async function saveSettings() {
+    const bal  = parseFloat(document.getElementById('settingsBalance').value);
+    const dept = document.getElementById('settingsDept').value.trim();
+    if (isNaN(bal) || bal < 0) return;
+
+    const btn = document.getElementById('saveSettingsBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving…';
+    try {
+      await DataManager.updateSettings({
+        initialBalance: String(bal),
+        departmentName: dept || 'My Department',
+        setupDone: 'true'
+      });
+      App.hideModal('settingsModal');
+      renderDashboard();
+      App.toast('Settings saved.');
+    } catch (e) {
+      App.toast('Error: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i>Save';
+    }
+  }
+</script>
+</body>
+</html>

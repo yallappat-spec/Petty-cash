@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reports — Petty Cash Manager</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+</head>
+<body>
+
+<!-- ── Page Loader ── -->
+<div id="pageLoader">
+  <div class="loader-spinner"></div>
+  <div class="loader-text">Loading reports…</div>
+</div>
+
+<!-- ── Config banner ── -->
+<div id="configBanner">
+  <div class="config-box">
+    <div style="font-size:36px;margin-bottom:12px">⚙️</div>
+    <h2>Not Connected</h2>
+    <p>Please fill in your Apps Script URL in <code>config.js</code> and reload.</p>
+    <a href="index.html" class="btn btn-primary mt-2">Back to Setup Guide</a>
+  </div>
+</div>
+
+<button class="sidebar-toggle" onclick="App.toggleSidebar()"><i class="fas fa-bars"></i></button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="App.toggleSidebar()"></div>
+
+<!-- ── Sidebar ── -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand d-flex align-items-center">
+    <span class="brand-icon"><i class="fas fa-wallet"></i></span>
+    <div><div class="brand-name">Petty Cash</div><div class="brand-sub" id="deptName">Department Manager</div></div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Main</div>
+    <a href="index.html"        class="nav-link"><span class="nav-icon"><i class="fas fa-gauge"></i></span> Dashboard</a>
+    <a href="transactions.html" class="nav-link"><span class="nav-icon"><i class="fas fa-plus-circle"></i></span> Add Transaction</a>
+    <a href="approvals.html"    class="nav-link"><span class="nav-icon"><i class="fas fa-check-circle"></i></span> Approvals <span class="nav-badge d-none" id="pendingBadge">0</span></a>
+    <a href="reports.html"      class="nav-link"><span class="nav-icon"><i class="fas fa-chart-bar"></i></span> Reports</a>
+    <div class="nav-section-label mt-3">Settings</div>
+    <a href="index.html" class="nav-link"><span class="nav-icon"><i class="fas fa-gear"></i></span> Settings</a>
+  </nav>
+  <div class="sidebar-footer"><div class="version">v2.0 &nbsp;·&nbsp; Google Sheets backend</div></div>
+</aside>
+
+<!-- ── Main ── -->
+<main class="main-content">
+
+  <div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-2">
+    <div>
+      <h1><i class="fas fa-chart-bar me-2 text-primary"></i>Reports</h1>
+      <div class="subtitle">Analyse and export petty cash activity</div>
+    </div>
+    <div class="d-flex gap-2 no-print align-items-center">
+      <button class="btn-refresh" onclick="doRefresh()"><i class="fas fa-rotate-right" id="refreshIcon"></i> Refresh</button>
+      <button class="btn btn-outline" onclick="exportCSV()"><i class="fas fa-download me-1"></i>Export CSV</button>
+      <button class="btn btn-primary" onclick="window.print()"><i class="fas fa-print me-1"></i>Print</button>
+    </div>
+  </div>
+
+  <!-- Error banner -->
+  <div id="errorBanner" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 18px;margin-bottom:16px;align-items:center;gap:10px;font-size:13.5px;color:#dc2626">
+    <i class="fas fa-triangle-exclamation"></i>
+    <span class="error-msg"></span>
+    <button class="btn-refresh ms-auto" onclick="location.reload()"><i class="fas fa-rotate-right"></i> Retry</button>
+  </div>
+
+  <!-- Filters -->
+  <div class="card p-3 mb-4 no-print">
+    <div class="filters-row">
+      <div class="form-group">
+        <label class="form-label fs-sm">Quick Range</label>
+        <select class="form-select form-select-sm" id="quickRange" onchange="applyQuickRange()" style="width:140px">
+          <option value="this_month" selected>This Month</option>
+          <option value="last_month">Last Month</option>
+          <option value="this_year">This Year</option>
+          <option value="all">All Time</option>
+          <option value="">Custom</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label fs-sm">From</label>
+        <input type="date" class="form-control form-control-sm" id="rFrom" onchange="renderAll()" />
+      </div>
+      <div class="form-group">
+        <label class="form-label fs-sm">To</label>
+        <input type="date" class="form-control form-control-sm" id="rTo" onchange="renderAll()" />
+      </div>
+      <div class="form-group">
+        <label class="form-label fs-sm">Type</label>
+        <select class="form-select form-select-sm" id="rType" onchange="renderAll()" style="width:150px">
+          <option value="all">All Types</option>
+          <option value="expense">Expenses only</option>
+          <option value="replenishment">Replenishments only</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-top:auto">
+        <button class="btn btn-outline btn-sm" onclick="applyQuickRange()"><i class="fas fa-rotate-left me-1"></i>Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="report-summary mb-4">
+    <div class="stat-card">
+      <div class="stat-icon red"><i class="fas fa-arrow-trend-up"></i></div>
+      <div>
+        <div class="stat-label">Total Expenses</div>
+        <div class="stat-value" id="rTotalExpenses">—</div>
+        <div class="text-muted fs-sm" id="rExpenseCount"></div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon green"><i class="fas fa-rotate"></i></div>
+      <div>
+        <div class="stat-label">Total Replenishments</div>
+        <div class="stat-value" id="rTotalReplenish">—</div>
+        <div class="text-muted fs-sm" id="rReplenishCount"></div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon blue"><i class="fas fa-scale-balanced"></i></div>
+      <div>
+        <div class="stat-label">Net Cash Flow</div>
+        <div class="stat-value" id="rNetFlow">—</div>
+        <div class="text-muted fs-sm">replenish − expenses</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon orange"><i class="fas fa-list"></i></div>
+      <div>
+        <div class="stat-label">Total Transactions</div>
+        <div class="stat-value" id="rTotal">—</div>
+        <div class="text-muted fs-sm" id="rPeriodLabel"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <!-- Category Breakdown -->
+    <div class="col-lg-5">
+      <div class="table-wrapper">
+        <div class="table-toolbar"><span class="table-title"><i class="fas fa-tags me-2 text-primary"></i>Expense by Category</span></div>
+        <div id="catWrap">
+          <table>
+            <thead><tr><th>Category</th><th style="text-align:right">Amount</th><th style="text-align:right">% Share</th><th>Bar</th></tr></thead>
+            <tbody id="catTbody"></tbody>
+            <tfoot id="catFoot"></tfoot>
+          </table>
+        </div>
+        <div id="catEmpty" class="empty-state d-none">
+          <div class="empty-icon"><i class="fas fa-tags"></i></div>
+          <p>No approved expenses in this period.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monthly Summary -->
+    <div class="col-lg-7">
+      <div class="table-wrapper">
+        <div class="table-toolbar"><span class="table-title"><i class="fas fa-calendar me-2 text-primary"></i>Monthly Summary</span></div>
+        <div id="monthWrap">
+          <table>
+            <thead><tr><th>Month</th><th style="text-align:right">Expenses</th><th style="text-align:right">Replenishments</th><th style="text-align:right">Net</th><th>Trend</th></tr></thead>
+            <tbody id="monthTbody"></tbody>
+          </table>
+        </div>
+        <div id="monthEmpty" class="empty-state d-none">
+          <div class="empty-icon"><i class="fas fa-calendar-xmark"></i></div>
+          <p>No data for selected period.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transaction Detail -->
+  <div class="table-wrapper">
+    <div class="table-toolbar">
+      <span class="table-title"><i class="fas fa-list-ul me-2 text-primary"></i>Transaction Detail</span>
+      <span class="text-muted fs-sm" id="detailCount"></span>
+    </div>
+    <div id="detailWrap" style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th><th>Type</th><th>Category</th><th>Description</th>
+            <th>Submitted By</th><th>Reference</th><th style="text-align:right">Amount (₹)</th><th>Status</th><th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="detailTbody"></tbody>
+      </table>
+    </div>
+    <div id="detailEmpty" class="empty-state d-none">
+      <div class="empty-icon"><i class="fas fa-search"></i></div>
+      <p>No transactions found for the selected filters.</p>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── Toast ── -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="appToast" class="toast">
+    <div class="d-flex align-items-center gap-2 p-3">
+      <i class="fas fa-check-circle"></i>
+      <span id="toastMsg"></span>
+      <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .cat-bar-bg { height:8px;border-radius:4px;background:#e2e8f0;overflow:hidden;min-width:60px; }
+  .cat-bar-fill { height:100%;border-radius:4px;background:var(--accent);transition:width .4s; }
+  tfoot td { font-weight:700;font-size:13px;border-top:2px solid var(--border);padding:10px 16px; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+  App.setActiveNav();
+
+  // ── Bootstrap ─────────────────────────────────────────────
+  (async () => {
+    App.showLoader('Loading reports…');
+    try {
+      await DataManager.init();
+      App.hideLoader();
+      if (DataManager._noConfig) { App.showConfigBanner(); return; }
+      document.getElementById('deptName').textContent =
+        DataManager.getData()?.fund?.departmentName || CONFIG.DEPARTMENT_NAME;
+      App.updatePendingBadge();
+      applyQuickRange();
+    } catch (e) {
+      App.hideLoader();
+      App.showError('Could not load data: ' + e.message);
+    }
+  })();
+
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !DataManager._noConfig) doRefresh(true);
+  });
+
+  // ── Date Presets ──────────────────────────────────────────
+  function applyQuickRange() {
+    const range = document.getElementById('quickRange').value;
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2,'0');
+    let from = '', to = '';
+
+    if (range === 'this_month') {
+      from = `${y}-${m}-01`; to = App.todayISO();
+    } else if (range === 'last_month') {
+      const d1 = new Date(y, now.getMonth() - 1, 1);
+      const d2 = new Date(y, now.getMonth(), 0);
+      from = d1.toISOString().split('T')[0];
+      to   = d2.toISOString().split('T')[0];
+    } else if (range === 'this_year') {
+      from = `${y}-01-01`; to = App.todayISO();
+    }
+    document.getElementById('rFrom').value = from;
+    document.getElementById('rTo').value   = to;
+    renderAll();
+  }
+
+  // ── Main Render ───────────────────────────────────────────
+  function renderAll() {
+    const from = document.getElementById('rFrom').value;
+    const to   = document.getElementById('rTo').value;
+    const type = document.getElementById('rType').value;
+
+    const allTxs   = DataManager.getFilteredTransactions({ from, to, type, status: 'all' });
+    const approved = allTxs.filter(t => t.status === 'approved');
+    const expenses = approved.filter(t => t.type === 'expense');
+    const replenishments = approved.filter(t => t.type === 'replenishment');
+    const totalExp = expenses.reduce((s, t) => s + t.amount, 0);
+    const totalRep = replenishments.reduce((s, t) => s + t.amount, 0);
+    const net      = totalRep - totalExp;
+
+    document.getElementById('rTotalExpenses').textContent  = App.fmt(totalExp);
+    document.getElementById('rExpenseCount').textContent   = `${expenses.length} transaction${expenses.length!==1?'s':''}`;
+    document.getElementById('rTotalReplenish').textContent = App.fmt(totalRep);
+    document.getElementById('rReplenishCount').textContent = `${replenishments.length} transaction${replenishments.length!==1?'s':''}`;
+
+    const netEl = document.getElementById('rNetFlow');
+    netEl.textContent = (net >= 0 ? '+' : '') + App.fmt(net);
+    netEl.style.color = net >= 0 ? 'var(--success)' : 'var(--danger)';
+
+    document.getElementById('rTotal').textContent      = allTxs.length;
+    document.getElementById('rPeriodLabel').textContent = from && to
+      ? `${App.fmtDate(from)} – ${App.fmtDate(to)}`
+      : 'all time';
+
+    renderCategoryBreakdown(expenses, totalExp);
+    renderMonthlySummary(approved);
+    renderDetail(allTxs);
+  }
+
+  // ── Category Breakdown ────────────────────────────────────
+  function renderCategoryBreakdown(expenses, totalExp) {
+    const map = {};
+    expenses.forEach(t => { map[t.category] = (map[t.category] || 0) + t.amount; });
+    const cats = Object.entries(map).sort((a, b) => b[1] - a[1]);
+
+    const tbody = document.getElementById('catTbody');
+    const foot  = document.getElementById('catFoot');
+    const wrap  = document.getElementById('catWrap');
+    const empty = document.getElementById('catEmpty');
+
+    if (!cats.length) { wrap.style.display='none'; empty.classList.remove('d-none'); foot.innerHTML=''; return; }
+    wrap.style.display = ''; empty.classList.add('d-none');
+    const maxVal = cats[0][1];
+
+    tbody.innerHTML = cats.map(([cat, amt]) => {
+      const pct  = totalExp > 0 ? ((amt/totalExp)*100).toFixed(1) : 0;
+      const barW = maxVal  > 0 ? ((amt/maxVal )*100).toFixed(1) : 0;
+      return `<tr>
+        <td style="font-size:13px">${cat}</td>
+        <td style="text-align:right;font-weight:600;color:var(--danger)">${App.fmt(amt)}</td>
+        <td style="text-align:right;color:var(--muted);font-size:12px">${pct}%</td>
+        <td style="min-width:80px"><div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${barW}%"></div></div></td>
+      </tr>`;
+    }).join('');
+
+    foot.innerHTML = `<tr><td>Total</td><td style="text-align:right;color:var(--danger)">${App.fmt(totalExp)}</td><td style="text-align:right">100%</td><td></td></tr>`;
+  }
+
+  // ── Monthly Summary ───────────────────────────────────────
+  function renderMonthlySummary(approved) {
+    const map = {};
+    approved.forEach(t => {
+      const d   = new Date(t.date + 'T00:00:00');
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      if (!map[key]) map[key] = { exp: 0, rep: 0 };
+      if (t.type === 'expense')       map[key].exp += t.amount;
+      if (t.type === 'replenishment') map[key].rep += t.amount;
+    });
+
+    const months = Object.keys(map).sort().reverse();
+    const wrap   = document.getElementById('monthWrap');
+    const empty  = document.getElementById('monthEmpty');
+
+    if (!months.length) { wrap.style.display='none'; empty.classList.remove('d-none'); return; }
+    wrap.style.display = ''; empty.classList.add('d-none');
+
+    const maxExp = Math.max(...months.map(k => map[k].exp), 1);
+
+    document.getElementById('monthTbody').innerHTML = months.map(key => {
+      const [y, mon] = key.split('-');
+      const label = new Date(+y, +mon - 1, 1).toLocaleDateString('en-IN', { month:'long', year:'numeric' });
+      const { exp, rep } = map[key];
+      const net = rep - exp;
+      const barW = ((exp / maxExp) * 100).toFixed(1);
+      return `<tr>
+        <td style="font-size:13px;white-space:nowrap">${label}</td>
+        <td style="text-align:right;color:var(--danger);font-weight:600">${App.fmt(exp)}</td>
+        <td style="text-align:right;color:var(--success);font-weight:600">${App.fmt(rep)}</td>
+        <td style="text-align:right;font-weight:600;color:${net>=0?'var(--success)':'var(--danger)'}">
+          ${net>=0?'+':''}${App.fmt(net)}
+        </td>
+        <td style="min-width:80px"><div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${barW}%;background:var(--danger)"></div></div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── Transaction Detail ────────────────────────────────────
+  function renderDetail(txs) {
+    const wrap  = document.getElementById('detailWrap');
+    const empty = document.getElementById('detailEmpty');
+
+    document.getElementById('detailCount').textContent = `${txs.length} record${txs.length!==1?'s':''}`;
+
+    if (!txs.length) { wrap.style.display='none'; empty.classList.remove('d-none'); return; }
+    wrap.style.display = ''; empty.classList.add('d-none');
+
+    document.getElementById('detailTbody').innerHTML = txs.map(t => `
+      <tr>
+        <td style="white-space:nowrap">${App.fmtDate(t.date)}</td>
+        <td>${App.typeBadge(t.type)}</td>
+        <td style="font-size:13px">${t.category}</td>
+        <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.description}">${t.description}</td>
+        <td class="text-muted fs-sm">${t.submittedBy || '—'}</td>
+        <td class="text-muted fs-sm">${t.reference || '—'}</td>
+        <td style="text-align:right" class="${t.type==='expense'?'amount-expense':'amount-replenish'}">
+          ${t.type==='expense'?'−':'+'}${App.fmt(t.amount)}
+        </td>
+        <td>${App.statusBadge(t.status)}</td>
+        <td class="text-muted fs-sm" style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.notes||''}">${t.notes||'—'}</td>
+      </tr>`).join('');
+  }
+
+  // ── Export ────────────────────────────────────────────────
+  function exportCSV() {
+    const from = document.getElementById('rFrom').value;
+    const to   = document.getElementById('rTo').value;
+    const type = document.getElementById('rType').value;
+    const txs  = DataManager.getFilteredTransactions({ from, to, type, status: 'all' });
+    if (!txs.length) { App.toast('No data to export.', 'warning'); return; }
+    const csv  = DataManager.exportCSV(txs);
+    const name = `petty-cash-${from||'all'}-to-${to||'all'}.csv`;
+    App.downloadFile(csv, name, 'text/csv;charset=utf-8;');
+    App.toast(`Exported ${txs.length} records.`);
+  }
+
+  // ── Refresh ───────────────────────────────────────────────
+  async function doRefresh(silent = false) {
+    const icon = document.getElementById('refreshIcon');
+    icon.classList.add('fa-spin');
+    try {
+      await DataManager.refresh();
+      App.updatePendingBadge();
+      renderAll();
+      if (!silent) App.toast('Data refreshed.', 'info');
+    } catch (e) {
+      App.toast('Refresh failed: ' + e.message, 'error');
+    } finally {
+      icon.classList.remove('fa-spin');
+    }
+  }
+</script>
+</body>
+</html>
