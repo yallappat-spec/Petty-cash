@@ -86,6 +86,7 @@
     </div>
     <div class="d-flex gap-2">
       <button class="btn-refresh" onclick="doRefresh()"><i class="fas fa-rotate-right" id="refreshIcon"></i> Refresh</button>
+      <button class="btn btn-outline btn-sm" id="exportBtn" onclick="exportExcel()" style="display:none"><i class="fas fa-file-excel me-1" style="color:#16a34a"></i>Export Excel</button>
       <a href="travel-report.html" class="btn btn-outline btn-sm"><i class="fas fa-file-invoice me-1"></i>View Report</a>
     </div>
   </div>
@@ -180,11 +181,6 @@
               <input type="text" class="form-control fw-semibold" id="txTotal" readonly style="background:#f0fdf4;color:#16a34a;font-size:16px" />
             </div>
           </div>
-          <div class="mb-4">
-            <label class="form-label">Submitted By <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="txSubmitter" placeholder="Your name" maxlength="80" />
-          </div>
-
           <button class="btn btn-primary w-100" id="addBtn" onclick="addEntry()">
             <i class="fas fa-plus me-2"></i>Add Entry
           </button>
@@ -211,7 +207,6 @@
                   <th style="text-align:right">KM</th>
                   <th style="text-align:right">Rate (₹)</th>
                   <th style="text-align:right">Total (₹)</th>
-                  <th>Submitted By</th>
                   <th></th>
                 </tr>
               </thead>
@@ -357,17 +352,16 @@ var CONFIG = {
 
   // ── Add Entry ─────────────────────────────────────────────
   async function addEntry() {
-    const date      = document.getElementById('txDate').value;
-    const from      = document.getElementById('txFrom').value.trim();
-    const to        = document.getElementById('txTo').value.trim();
-    const km        = document.getElementById('txKm').value;
-    const rate      = document.getElementById('txRate').value;
-    const submitter = document.getElementById('txSubmitter').value.trim();
+    const date = document.getElementById('txDate').value;
+    const from = document.getElementById('txFrom').value.trim();
+    const to   = document.getElementById('txTo').value.trim();
+    const km   = document.getElementById('txKm').value;
+    const rate = document.getElementById('txRate').value;
 
     // Validate
     let valid = true;
     [['txDate', !date], ['txFrom', !from], ['txTo', !to],
-     ['txKm', !km || parseFloat(km) <= 0], ['txSubmitter', !submitter]
+     ['txKm', !km || parseFloat(km) <= 0]
     ].forEach(([id, inv]) => {
       document.getElementById(id).classList.toggle('is-invalid', inv);
       if (inv) valid = false;
@@ -383,10 +377,10 @@ var CONFIG = {
         action: 'addTravelExpense',
         expense: {
           date, from, to, km, perKmRate: rate,
-          auditor:     session.auditor,
-          month:       session.month,
-          year:        session.year,
-          submittedBy: submitter
+          auditor: session.auditor,
+          month:   session.month,
+          year:    session.year,
+          submittedBy: ''
         }
       });
       await DataManager.refresh();
@@ -435,6 +429,7 @@ var CONFIG = {
 
     wrap.style.display  = '';
     empty.style.display = 'none';
+    document.getElementById('exportBtn').style.display = '';
 
     const totalKm  = all.reduce((s, t) => s + t.km, 0);
     const totalAmt = all.reduce((s, t) => s + t.total, 0);
@@ -447,7 +442,6 @@ var CONFIG = {
         <td style="text-align:right"><span class="km-badge">${parseFloat(t.km).toFixed(1)}</span></td>
         <td style="text-align:right">₹${parseFloat(t.perKmRate).toFixed(2)}</td>
         <td style="text-align:right;font-weight:600;color:var(--danger)">₹${parseFloat(t.total).toFixed(2)}</td>
-        <td class="text-muted fs-sm">${t.submittedBy || '—'}</td>
         <td>
           <button class="btn btn-sm btn-icon" style="color:var(--danger)" title="Delete" onclick="confirmDelete('${t.id}')">
             <i class="fas fa-trash"></i>
@@ -461,7 +455,7 @@ var CONFIG = {
         <td style="text-align:right"><span class="km-badge">${totalKm.toFixed(1)}</span></td>
         <td></td>
         <td style="text-align:right;color:var(--success)">₹${totalAmt.toFixed(2)}</td>
-        <td colspan="2"></td>
+        <td></td>
       </tr>`;
   }
 
@@ -501,6 +495,73 @@ var CONFIG = {
     } finally {
       icon.classList.remove('fa-spin');
     }
+  }
+
+  // ── Export Excel ──────────────────────────────────────────
+  function exportExcel() {
+    if (!session.month) return;
+    const all = (DataManager.getData()?.travelExpenses || []).filter(t =>
+      parseInt(t.month) === session.month &&
+      parseInt(t.year)  === session.year  &&
+      t.auditor === session.auditor
+    );
+    if (!all.length) { App.toast('No entries to export.', 'warning'); return; }
+
+    const sorted    = [...all].sort((a, b) => a.date > b.date ? 1 : -1);
+    const totalKm   = sorted.reduce((s, t) => s + t.km,    0);
+    const totalAmt  = sorted.reduce((s, t) => s + t.total, 0);
+    const dept      = DataManager.getData()?.fund?.departmentName || 'Department';
+    const title     = `Petrol / Travel Expense — ${MONTHS[session.month]} ${session.year}`;
+    const auditor   = session.auditor;
+
+    // Build HTML table (Excel opens .xls HTML tables natively)
+    const rows = sorted.map((t, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${App.fmtDate(t.date)}</td>
+        <td>${t.from}</td>
+        <td>${t.to}</td>
+        <td align="right">${parseFloat(t.km).toFixed(1)}</td>
+        <td align="right">${parseFloat(t.perKmRate).toFixed(2)}</td>
+        <td align="right"><b>${parseFloat(t.total).toFixed(2)}</b></td>
+      </tr>`).join('');
+
+    const html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:x="urn:schemas-microsoft-com:office:excel"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head><meta charset="UTF-8">
+      <style>
+        body  { font-family: Arial, sans-serif; font-size: 11pt; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 6px 10px; }
+        th { background: #1e293b; color: #fff; font-weight: bold; }
+        .title-row td { background: #eff6ff; font-weight: bold; font-size: 13pt; border: none; }
+        .info-row  td { background: #f8fafc; border: none; font-size: 10pt; color: #555; }
+        .total-row td { background: #f0fdf4; font-weight: bold; color: #16a34a; }
+      </style>
+      </head><body>
+      <table>
+        <tr class="title-row"><td colspan="7">${title}</td></tr>
+        <tr class="info-row"><td colspan="7">Auditor: ${auditor} &nbsp;|&nbsp; Department: ${dept}</td></tr>
+        <tr><td></td></tr>
+        <tr>
+          <th>#</th><th>Date</th><th>From</th><th>To</th>
+          <th>No. of KM</th><th>Per KM (₹)</th><th>Total (₹)</th>
+        </tr>
+        ${rows}
+        <tr class="total-row">
+          <td colspan="4" align="right">Total</td>
+          <td align="right">${totalKm.toFixed(1)}</td>
+          <td></td>
+          <td align="right">${totalAmt.toFixed(2)}</td>
+        </tr>
+      </table>
+      </body></html>`;
+
+    const filename = `Travel-${MONTHS[session.month]}-${session.year}-${auditor.replace(/\s+/g,'-')}.xls`;
+    App.downloadFile(html, filename, 'application/vnd.ms-excel;charset=utf-8;');
+    App.toast(`Exported ${sorted.length} entries to Excel.`, 'success');
   }
 
   // Clear validation on input
