@@ -155,29 +155,6 @@
   </div>
 </div>
 
-<!-- ── Setup Modal ── -->
-<div class="modal fade" id="setupModal" data-bs-backdrop="static" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="fas fa-wallet text-primary me-2"></i>Welcome! Set Opening Balance</h5>
-      </div>
-      <div class="modal-body p-4">
-        <p class="text-muted mb-3" style="font-size:14px">Enter the current amount physically available in your petty cash fund. You can adjust this later in Settings.</p>
-        <label class="form-label">Opening Balance (₹)</label>
-        <div class="input-group">
-          <span class="input-group-text">₹</span>
-          <input type="number" class="form-control" id="setupBalance" placeholder="e.g. 5000" min="0" step="0.01" />
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-primary w-100" onclick="completeSetup()">
-          <i class="fas fa-check me-2"></i>Start Managing
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- ── Settings Modal ── -->
 <div class="modal fade" id="settingsModal" tabindex="-1">
@@ -241,7 +218,7 @@ var CONFIG = {
       if (DataManager._noConfig) { App.showConfigBanner(); return; }
 
       if (!DataManager.isSetupDone()) {
-        App.showModal('setupModal');
+        await DataManager.completeSetup(0);
       }
       renderDashboard();
 
@@ -315,26 +292,6 @@ var CONFIG = {
       App.toast('Refresh failed: ' + e.message, 'error');
     } finally {
       icon.classList.remove('fa-spin');
-    }
-  }
-
-  // ── Setup ─────────────────────────────────────────────────
-  async function completeSetup() {
-    const val = parseFloat(document.getElementById('setupBalance').value);
-    if (isNaN(val) || val < 0) {
-      document.getElementById('setupBalance').classList.add('is-invalid'); return;
-    }
-    const btn = document.querySelector('#setupModal .btn-primary');
-    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving…';
-    try {
-      await DataManager.completeSetup(val);
-      App.hideModal('setupModal');
-      renderDashboard();
-      App.toast('Fund set up successfully!');
-    } catch (e) {
-      App.toast('Error: ' + e.message, 'error');
-    } finally {
-      btn.disabled = false; btn.innerHTML = '<i class="fas fa-check me-2"></i>Start Managing';
     }
   }
 
