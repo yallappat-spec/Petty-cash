@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Petrol / Travel Expenses — Petty Cash Manager</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+  <style>
+    .filter-card {
+      background: linear-gradient(135deg, #1e293b 0%, #2563eb 100%);
+      border-radius: 14px;
+      padding: 24px 28px;
+      margin-bottom: 24px;
+      color: #fff;
+    }
+    .filter-card h5 { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: #fff; }
+    .filter-card .form-label { color: #cbd5e1; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+    .filter-card .form-control,
+    .filter-card .form-select { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 8px; }
+    .filter-card .form-control::placeholder { color: rgba(255,255,255,.5); }
+    .filter-card .form-control:focus,
+    .filter-card .form-select:focus { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.5); box-shadow: none; color: #fff; }
+    .filter-card .form-select option { background: #1e293b; color: #fff; }
+    .entry-section { display: none; }
+    .entry-section.visible { display: block; }
+    .travel-table th { background: #f8fafc; font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+    .travel-table td { font-size: 13.5px; vertical-align: middle; }
+    .total-row td { font-weight: 700; background: #f0fdf4; color: #16a34a; border-top: 2px solid #16a34a !important; }
+    .km-badge { background: #eff6ff; color: #2563eb; padding: 2px 8px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .session-tag { background: #f1f5f9; border-radius: 8px; padding: 10px 16px; font-size: 13px; color: #475569; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .session-tag strong { color: #1e293b; }
+    .rate-input { max-width: 100px; }
+  </style>
+</head>
+<body>
+
+<!-- Page Loader -->
+<div id="pageLoader">
+  <div class="loader-spinner"></div>
+  <div class="loader-text">Loading…</div>
+</div>
+
+<!-- Config banner -->
+<div id="configBanner">
+  <div class="config-box">
+    <div style="font-size:36px;margin-bottom:12px">⚙️</div>
+    <h2>Not Connected</h2>
+    <p>Please fill in your Apps Script URL in <code>config.js</code> and reload.</p>
+    <a href="index.html" class="btn btn-primary mt-2">Back to Setup Guide</a>
+  </div>
+</div>
+
+<button class="sidebar-toggle" onclick="App.toggleSidebar()"><i class="fas fa-bars"></i></button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="App.toggleSidebar()"></div>
+
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand d-flex align-items-center">
+    <span class="brand-icon"><i class="fas fa-wallet"></i></span>
+    <div><div class="brand-name">Petty Cash</div><div class="brand-sub" id="deptName">Department Manager</div></div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Main</div>
+    <a href="index.html"        class="nav-link"><span class="nav-icon"><i class="fas fa-gauge"></i></span> Dashboard</a>
+    <a href="transactions.html" class="nav-link"><span class="nav-icon"><i class="fas fa-plus-circle"></i></span> Add Transaction</a>
+    <a href="approvals.html"    class="nav-link"><span class="nav-icon"><i class="fas fa-check-circle"></i></span> Approvals <span class="nav-badge d-none" id="pendingBadge">0</span></a>
+    <a href="reports.html"      class="nav-link"><span class="nav-icon"><i class="fas fa-chart-bar"></i></span> Reports</a>
+    <div class="nav-section-label mt-3">Travel</div>
+    <a href="travel.html"       class="nav-link"><span class="nav-icon"><i class="fas fa-car"></i></span> Petrol Expenses</a>
+    <a href="travel-report.html" class="nav-link"><span class="nav-icon"><i class="fas fa-file-invoice"></i></span> Travel Report</a>
+    <div class="nav-section-label mt-3">Settings</div>
+    <a href="index.html" class="nav-link"><span class="nav-icon"><i class="fas fa-gear"></i></span> Settings</a>
+  </nav>
+  <div class="sidebar-footer"><div class="version">v2.0 &nbsp;·&nbsp; Google Sheets backend</div></div>
+</aside>
+
+<!-- Main -->
+<main class="main-content">
+
+  <div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div>
+      <h1><i class="fas fa-car me-2 text-primary"></i>Petrol / Travel Expenses</h1>
+      <div class="subtitle">Select month, year and auditor to begin entering expenses</div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn-refresh" onclick="doRefresh()"><i class="fas fa-rotate-right" id="refreshIcon"></i> Refresh</button>
+      <a href="travel-report.html" class="btn btn-outline btn-sm"><i class="fas fa-file-invoice me-1"></i>View Report</a>
+    </div>
+  </div>
+
+  <!-- Error banner -->
+  <div id="errorBanner" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 18px;margin-bottom:16px;align-items:center;gap:10px;font-size:13.5px;color:#dc2626">
+    <i class="fas fa-triangle-exclamation"></i><span class="error-msg"></span>
+    <button class="btn-refresh ms-auto" onclick="location.reload()"><i class="fas fa-rotate-right"></i> Retry</button>
+  </div>
+
+  <!-- ── Step 1: Filter Selection ── -->
+  <div class="filter-card">
+    <h5><i class="fas fa-filter me-2"></i>Step 1 — Select Period &amp; Auditor</h5>
+    <div class="row g-3 align-items-end">
+      <div class="col-6 col-md-3">
+        <label class="form-label">Month</label>
+        <select class="form-select" id="selMonth">
+          <option value="">— Select —</option>
+          <option value="1">January</option><option value="2">February</option>
+          <option value="3">March</option><option value="4">April</option>
+          <option value="5">May</option><option value="6">June</option>
+          <option value="7">July</option><option value="8">August</option>
+          <option value="9">September</option><option value="10">October</option>
+          <option value="11">November</option><option value="12">December</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label">Year</label>
+        <select class="form-select" id="selYear"></select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Auditor Name</label>
+        <input type="text" class="form-control" id="selAuditor" placeholder="e.g. Ravi Kumar" maxlength="80" />
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Per KM Rate (₹)</label>
+        <input type="number" class="form-control rate-input" id="selRate" placeholder="e.g. 7" min="0" step="0.1" value="7" />
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-primary w-100" onclick="applySession()">
+          <i class="fas fa-check me-1"></i>Start Entry
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Step 2: Entry Form (shown after session selection) ── -->
+  <div class="entry-section" id="entrySection">
+
+    <!-- Session tag -->
+    <div class="session-tag">
+      <i class="fas fa-calendar-check text-primary"></i>
+      Period: <strong id="sessionLabel">—</strong> &nbsp;|&nbsp;
+      <i class="fas fa-user text-primary"></i>
+      Auditor: <strong id="sessionAuditor">—</strong> &nbsp;|&nbsp;
+      <i class="fas fa-road text-primary"></i>
+      Rate: <strong id="sessionRate">—</strong>/km
+      <button class="btn btn-outline btn-sm ms-3" onclick="clearSession()"><i class="fas fa-pen me-1"></i>Change</button>
+    </div>
+
+    <div class="row g-4">
+
+      <!-- Add Entry Form -->
+      <div class="col-lg-4">
+        <div class="card p-4">
+          <h6 class="fw-semibold mb-4"><i class="fas fa-plus-circle me-2 text-primary"></i>Add Travel Entry</h6>
+
+          <div class="mb-3">
+            <label class="form-label">Date <span class="text-danger">*</span></label>
+            <input type="date" class="form-control" id="txDate" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">From <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="txFrom" placeholder="e.g. HO" maxlength="100" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">To <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="txTo" placeholder="e.g. RR Nagar" maxlength="100" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">No. of KM <span class="text-danger">*</span></label>
+            <input type="number" class="form-control" id="txKm" placeholder="e.g. 8.3" min="0.1" step="0.1" oninput="calcTotal()" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Per KM Rate (₹)</label>
+            <input type="number" class="form-control" id="txRate" min="0" step="0.1" oninput="calcTotal()" readonly style="background:#f8fafc" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Total Amount (₹)</label>
+            <div class="input-group">
+              <span class="input-group-text">₹</span>
+              <input type="text" class="form-control fw-semibold" id="txTotal" readonly style="background:#f0fdf4;color:#16a34a;font-size:16px" />
+            </div>
+          </div>
+          <div class="mb-4">
+            <label class="form-label">Submitted By <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="txSubmitter" placeholder="Your name" maxlength="80" />
+          </div>
+
+          <button class="btn btn-primary w-100" id="addBtn" onclick="addEntry()">
+            <i class="fas fa-plus me-2"></i>Add Entry
+          </button>
+        </div>
+      </div>
+
+      <!-- Entries Table -->
+      <div class="col-lg-8">
+        <div class="table-wrapper">
+          <div class="table-toolbar">
+            <span class="table-title">
+              <i class="fas fa-list me-2 text-primary"></i>
+              Entries for <span id="tableLabel">—</span>
+            </span>
+            <span class="text-muted fs-sm" id="entryCount"></span>
+          </div>
+          <div id="travelTableWrap" style="overflow-x:auto">
+            <table class="travel-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th style="text-align:right">KM</th>
+                  <th style="text-align:right">Rate (₹)</th>
+                  <th style="text-align:right">Total (₹)</th>
+                  <th>Submitted By</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="travelTbody"></tbody>
+              <tfoot id="travelTfoot"></tfoot>
+            </table>
+          </div>
+          <div id="travelEmpty" class="empty-state">
+            <div class="empty-icon"><i class="fas fa-car-side"></i></div>
+            <p>No entries yet for this period. Add your first travel entry.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<!-- Toast -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="appToast" class="toast">
+    <div class="d-flex align-items-center gap-2 p-3">
+      <i class="fas fa-check-circle"></i>
+      <span id="toastMsg"></span>
+      <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-body p-4 text-center">
+        <i class="fas fa-trash-alt fa-2x text-danger mb-3"></i>
+        <p class="mb-0">Delete this travel entry?</p>
+      </div>
+      <div class="modal-footer justify-content-center">
+        <button class="btn btn-outline btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-danger btn-sm" id="confirmDeleteBtn"><i class="fas fa-trash me-1"></i>Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  tfoot td { font-weight: 700; padding: 10px 16px; font-size: 13.5px; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+var CONFIG = {
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwDQP6uVT0UJCiQkSoQRmRkBy9kewvJ7IhlyZNgNJs2qRX4WSHxXS4lLo6G3J5c_zFUcQ/exec',
+  DEPARTMENT_NAME: 'My Department'
+};
+</script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+  App.setActiveNav();
+
+  // ── Session state ─────────────────────────────────────────
+  let session = { month: null, year: null, auditor: '', rate: 7, monthName: '' };
+
+  const MONTHS = ['','January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+
+  // Populate year dropdown (5 years back + 2 ahead)
+  const yearSel = document.getElementById('selYear');
+  const thisYear = new Date().getFullYear();
+  for (let y = thisYear + 1; y >= thisYear - 4; y--) {
+    yearSel.innerHTML += `<option value="${y}" ${y === thisYear ? 'selected' : ''}>${y}</option>`;
+  }
+
+  // Default month
+  document.getElementById('selMonth').value = new Date().getMonth() + 1;
+
+  // ── Bootstrap ─────────────────────────────────────────────
+  (async () => {
+    App.showLoader('Loading…');
+    try {
+      await DataManager.init();
+      App.hideLoader();
+      if (DataManager._noConfig) { App.showConfigBanner(); return; }
+      document.getElementById('deptName').textContent =
+        DataManager.getData()?.fund?.departmentName || CONFIG.DEPARTMENT_NAME;
+      App.updatePendingBadge();
+    } catch (e) {
+      App.hideLoader();
+      App.showError('Could not load data: ' + e.message);
+    }
+  })();
+
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !DataManager._noConfig) doRefresh(true);
+  });
+
+  // ── Session ───────────────────────────────────────────────
+  function applySession() {
+    const month   = document.getElementById('selMonth').value;
+    const year    = document.getElementById('selYear').value;
+    const auditor = document.getElementById('selAuditor').value.trim();
+    const rate    = parseFloat(document.getElementById('selRate').value) || 7;
+
+    // Validate
+    let ok = true;
+    if (!month)   { document.getElementById('selMonth').classList.add('is-invalid');   ok = false; }
+    if (!year)    { document.getElementById('selYear').classList.add('is-invalid');    ok = false; }
+    if (!auditor) { document.getElementById('selAuditor').classList.add('is-invalid'); ok = false; }
+    if (!ok) return;
+
+    session = { month: parseInt(month), year: parseInt(year), auditor, rate, monthName: MONTHS[month] };
+
+    // Update session labels
+    document.getElementById('sessionLabel').textContent   = `${MONTHS[month]} ${year}`;
+    document.getElementById('sessionAuditor').textContent = auditor;
+    document.getElementById('sessionRate').textContent    = `₹${rate}`;
+    document.getElementById('tableLabel').textContent     = `${MONTHS[month]} ${year} — ${auditor}`;
+
+    // Pre-fill rate in form
+    document.getElementById('txRate').value = rate;
+    document.getElementById('txDate').value = App.todayISO();
+    calcTotal();
+
+    // Show entry section
+    document.getElementById('entrySection').classList.add('visible');
+
+    renderTable();
+  }
+
+  function clearSession() {
+    document.getElementById('entrySection').classList.remove('visible');
+    session = { month: null, year: null, auditor: '', rate: 7, monthName: '' };
+  }
+
+  // ── Calc total ────────────────────────────────────────────
+  function calcTotal() {
+    const km   = parseFloat(document.getElementById('txKm').value)   || 0;
+    const rate = parseFloat(document.getElementById('txRate').value) || 0;
+    document.getElementById('txTotal').value = km && rate ? (km * rate).toFixed(2) : '';
+  }
+
+  // ── Add Entry ─────────────────────────────────────────────
+  async function addEntry() {
+    const date      = document.getElementById('txDate').value;
+    const from      = document.getElementById('txFrom').value.trim();
+    const to        = document.getElementById('txTo').value.trim();
+    const km        = document.getElementById('txKm').value;
+    const rate      = document.getElementById('txRate').value;
+    const submitter = document.getElementById('txSubmitter').value.trim();
+
+    // Validate
+    let valid = true;
+    [['txDate', !date], ['txFrom', !from], ['txTo', !to],
+     ['txKm', !km || parseFloat(km) <= 0], ['txSubmitter', !submitter]
+    ].forEach(([id, inv]) => {
+      document.getElementById(id).classList.toggle('is-invalid', inv);
+      if (inv) valid = false;
+    });
+    if (!valid) return;
+
+    const btn = document.getElementById('addBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving…';
+
+    try {
+      await DataManager._post({
+        action: 'addTravelExpense',
+        expense: {
+          date, from, to, km, perKmRate: rate,
+          auditor:     session.auditor,
+          month:       session.month,
+          year:        session.year,
+          submittedBy: submitter
+        }
+      });
+      await DataManager.refresh();
+
+      // Reset form (keep date, rate, submitter)
+      document.getElementById('txFrom').value = '';
+      document.getElementById('txTo').value   = '';
+      document.getElementById('txKm').value   = '';
+      document.getElementById('txTotal').value = '';
+      document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+
+      App.toast('Entry added!', 'success');
+      renderTable();
+    } catch (e) {
+      App.toast('Error: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-plus me-2"></i>Add Entry';
+    }
+  }
+
+  // ── Render Table ──────────────────────────────────────────
+  function renderTable() {
+    if (!session.month) return;
+
+    const all = (DataManager.getData()?.travelExpenses || []).filter(t =>
+      parseInt(t.month) === session.month &&
+      parseInt(t.year)  === session.year  &&
+      t.auditor === session.auditor
+    );
+
+    const tbody  = document.getElementById('travelTbody');
+    const tfoot  = document.getElementById('travelTfoot');
+    const wrap   = document.getElementById('travelTableWrap');
+    const empty  = document.getElementById('travelEmpty');
+    const count  = document.getElementById('entryCount');
+
+    count.textContent = `${all.length} entr${all.length !== 1 ? 'ies' : 'y'}`;
+
+    if (!all.length) {
+      wrap.style.display  = 'none';
+      empty.style.display = '';
+      tfoot.innerHTML = '';
+      return;
+    }
+
+    wrap.style.display  = '';
+    empty.style.display = 'none';
+
+    const totalKm  = all.reduce((s, t) => s + t.km, 0);
+    const totalAmt = all.reduce((s, t) => s + t.total, 0);
+
+    tbody.innerHTML = all.map(t => `
+      <tr>
+        <td style="white-space:nowrap">${App.fmtDate(t.date)}</td>
+        <td>${t.from}</td>
+        <td>${t.to}</td>
+        <td style="text-align:right"><span class="km-badge">${parseFloat(t.km).toFixed(1)}</span></td>
+        <td style="text-align:right">₹${parseFloat(t.perKmRate).toFixed(2)}</td>
+        <td style="text-align:right;font-weight:600;color:var(--danger)">₹${parseFloat(t.total).toFixed(2)}</td>
+        <td class="text-muted fs-sm">${t.submittedBy || '—'}</td>
+        <td>
+          <button class="btn btn-sm btn-icon" style="color:var(--danger)" title="Delete" onclick="confirmDelete('${t.id}')">
+            <i class="fas fa-trash"></i>
+          </button>
+        </td>
+      </tr>`).join('');
+
+    tfoot.innerHTML = `
+      <tr class="total-row">
+        <td colspan="3" style="text-align:right;color:var(--muted)">Total</td>
+        <td style="text-align:right"><span class="km-badge">${totalKm.toFixed(1)}</span></td>
+        <td></td>
+        <td style="text-align:right;color:var(--success)">₹${totalAmt.toFixed(2)}</td>
+        <td colspan="2"></td>
+      </tr>`;
+  }
+
+  // ── Delete ────────────────────────────────────────────────
+  let deleteTarget = null;
+  function confirmDelete(id) { deleteTarget = id; App.showModal('deleteModal'); }
+
+  document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+    if (!deleteTarget) return;
+    const btn = document.getElementById('confirmDeleteBtn');
+    btn.disabled = true;
+    try {
+      await DataManager._post({ action: 'deleteTravelExpense', id: deleteTarget });
+      await DataManager.refresh();
+      deleteTarget = null;
+      App.hideModal('deleteModal');
+      renderTable();
+      App.toast('Entry deleted.', 'info');
+    } catch (e) {
+      App.toast('Error: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ── Refresh ───────────────────────────────────────────────
+  async function doRefresh(silent = false) {
+    const icon = document.getElementById('refreshIcon');
+    icon.classList.add('fa-spin');
+    try {
+      await DataManager.refresh();
+      App.updatePendingBadge();
+      renderTable();
+      if (!silent) App.toast('Refreshed.', 'info');
+    } catch (e) {
+      App.toast('Refresh failed: ' + e.message, 'error');
+    } finally {
+      icon.classList.remove('fa-spin');
+    }
+  }
+
+  // Clear validation on input
+  document.querySelectorAll('.form-control, .form-select').forEach(el =>
+    el.addEventListener('input', () => el.classList.remove('is-invalid'))
+  );
+</script>
+</body>
+</html>

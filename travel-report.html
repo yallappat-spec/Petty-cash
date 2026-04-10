@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Travel Report — Petty Cash Manager</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+  <style>
+    .travel-table th { font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;background:#f8fafc; }
+    .travel-table td { font-size:13.5px;vertical-align:middle; }
+    tfoot td { font-weight:700;padding:10px 16px;font-size:13.5px;border-top:2px solid var(--border); }
+    .km-badge { background:#eff6ff;color:#2563eb;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600; }
+    .report-header-box {
+      background: linear-gradient(135deg,#1e293b,#2563eb);
+      border-radius:14px;padding:22px 28px;color:#fff;margin-bottom:24px;
+    }
+    .report-header-box h5 { font-size:15px;font-weight:700;margin:0 0 14px;color:#fff; }
+    .report-header-box .form-label { color:#cbd5e1;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em; }
+    .report-header-box .form-control,
+    .report-header-box .form-select { background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px; }
+    .report-header-box .form-control:focus,
+    .report-header-box .form-select:focus { background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.4);box-shadow:none;color:#fff; }
+    .report-header-box .form-select option { background:#1e293b;color:#fff; }
+    .report-header-box .form-control::placeholder { color:rgba(255,255,255,.5); }
+
+    /* Print styles */
+    @media print {
+      .sidebar,.sidebar-toggle,.no-print { display:none!important; }
+      .main-content { margin:0;padding:0; }
+      .report-header-box { display:none!important; }
+      .print-header { display:block!important; }
+      .table-wrapper { box-shadow:none;border:1px solid #ddd; }
+    }
+    .print-header {
+      display:none;
+      text-align:center;
+      margin-bottom:16px;
+    }
+    .print-header h3 { font-size:18px;font-weight:700;margin-bottom:4px; }
+    .print-header p  { font-size:13px;color:#555;margin:0; }
+  </style>
+</head>
+<body>
+
+<!-- Page Loader -->
+<div id="pageLoader">
+  <div class="loader-spinner"></div>
+  <div class="loader-text">Loading travel report…</div>
+</div>
+
+<!-- Config banner -->
+<div id="configBanner">
+  <div class="config-box">
+    <div style="font-size:36px;margin-bottom:12px">⚙️</div>
+    <h2>Not Connected</h2>
+    <p>Please fill in your Apps Script URL in <code>config.js</code> and reload.</p>
+    <a href="index.html" class="btn btn-primary mt-2">Back to Setup Guide</a>
+  </div>
+</div>
+
+<button class="sidebar-toggle" onclick="App.toggleSidebar()"><i class="fas fa-bars"></i></button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="App.toggleSidebar()"></div>
+
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand d-flex align-items-center">
+    <span class="brand-icon"><i class="fas fa-wallet"></i></span>
+    <div><div class="brand-name">Petty Cash</div><div class="brand-sub" id="deptName">Department Manager</div></div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Main</div>
+    <a href="index.html"         class="nav-link"><span class="nav-icon"><i class="fas fa-gauge"></i></span> Dashboard</a>
+    <a href="transactions.html"  class="nav-link"><span class="nav-icon"><i class="fas fa-plus-circle"></i></span> Add Transaction</a>
+    <a href="approvals.html"     class="nav-link"><span class="nav-icon"><i class="fas fa-check-circle"></i></span> Approvals <span class="nav-badge d-none" id="pendingBadge">0</span></a>
+    <a href="reports.html"       class="nav-link"><span class="nav-icon"><i class="fas fa-chart-bar"></i></span> Reports</a>
+    <div class="nav-section-label mt-3">Travel</div>
+    <a href="travel.html"        class="nav-link"><span class="nav-icon"><i class="fas fa-car"></i></span> Petrol Expenses</a>
+    <a href="travel-report.html" class="nav-link"><span class="nav-icon"><i class="fas fa-file-invoice"></i></span> Travel Report</a>
+    <div class="nav-section-label mt-3">Settings</div>
+    <a href="index.html" class="nav-link"><span class="nav-icon"><i class="fas fa-gear"></i></span> Settings</a>
+  </nav>
+  <div class="sidebar-footer"><div class="version">v2.0 &nbsp;·&nbsp; Google Sheets backend</div></div>
+</aside>
+
+<!-- Main -->
+<main class="main-content">
+
+  <div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2 no-print">
+    <div>
+      <h1><i class="fas fa-file-invoice me-2 text-primary"></i>Travel Report</h1>
+      <div class="subtitle">Filter by auditor, month and year</div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn-refresh" onclick="doRefresh()"><i class="fas fa-rotate-right" id="refreshIcon"></i> Refresh</button>
+      <button class="btn btn-outline" onclick="exportCSV()"><i class="fas fa-download me-1"></i>Export CSV</button>
+      <button class="btn btn-primary" onclick="window.print()"><i class="fas fa-print me-1"></i>Print</button>
+    </div>
+  </div>
+
+  <!-- Error banner -->
+  <div id="errorBanner" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 18px;margin-bottom:16px;align-items:center;gap:10px;font-size:13.5px;color:#dc2626">
+    <i class="fas fa-triangle-exclamation"></i><span class="error-msg"></span>
+    <button class="btn-refresh ms-auto" onclick="location.reload()"><i class="fas fa-rotate-right"></i> Retry</button>
+  </div>
+
+  <!-- Filters -->
+  <div class="report-header-box no-print">
+    <h5><i class="fas fa-filter me-2"></i>Filter Report</h5>
+    <div class="row g-3 align-items-end">
+      <div class="col-6 col-md-3">
+        <label class="form-label">Month</label>
+        <select class="form-select" id="fMonth" onchange="renderReport()">
+          <option value="all">All Months</option>
+          <option value="1">January</option><option value="2">February</option>
+          <option value="3">March</option><option value="4">April</option>
+          <option value="5">May</option><option value="6">June</option>
+          <option value="7">July</option><option value="8">August</option>
+          <option value="9">September</option><option value="10">October</option>
+          <option value="11">November</option><option value="12">December</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label">Year</label>
+        <select class="form-select" id="fYear" onchange="renderReport()"></select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Auditor</label>
+        <select class="form-select" id="fAuditor" onchange="renderReport()">
+          <option value="all">All Auditors</option>
+        </select>
+      </div>
+      <div class="col-md-3" style="margin-top:auto">
+        <button class="btn btn-outline btn-sm w-100" onclick="clearFilters()" style="border-color:rgba(255,255,255,.3);color:#fff;background:rgba(255,255,255,.1)">
+          <i class="fas fa-rotate-left me-1"></i>Reset Filters
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Print header (only visible when printing) -->
+  <div class="print-header" id="printHeader">
+    <h3 id="printTitle">Travel Expense Report</h3>
+    <p id="printSubtitle"></p>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="report-summary mb-4">
+    <div class="stat-card">
+      <div class="stat-icon blue"><i class="fas fa-road"></i></div>
+      <div><div class="stat-label">Total KM</div><div class="stat-value" id="rTotalKm">—</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon red"><i class="fas fa-indian-rupee-sign"></i></div>
+      <div><div class="stat-label">Total Amount</div><div class="stat-value" id="rTotalAmt">—</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon orange"><i class="fas fa-list"></i></div>
+      <div><div class="stat-label">Total Trips</div><div class="stat-value" id="rTotalTrips">—</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon green"><i class="fas fa-user-check"></i></div>
+      <div><div class="stat-label">Auditors</div><div class="stat-value" id="rAuditorCount">—</div></div>
+    </div>
+  </div>
+
+  <!-- Auditor-wise Summary -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-5">
+      <div class="table-wrapper">
+        <div class="table-toolbar"><span class="table-title"><i class="fas fa-user me-2 text-primary"></i>Auditor Summary</span></div>
+        <div id="auditorWrap">
+          <table class="travel-table">
+            <thead><tr><th>Auditor</th><th style="text-align:right">Trips</th><th style="text-align:right">KM</th><th style="text-align:right">Amount (₹)</th><th>Bar</th></tr></thead>
+            <tbody id="auditorTbody"></tbody>
+          </table>
+        </div>
+        <div id="auditorEmpty" class="empty-state d-none">
+          <div class="empty-icon"><i class="fas fa-user-slash"></i></div><p>No data.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monthly Summary -->
+    <div class="col-lg-7">
+      <div class="table-wrapper">
+        <div class="table-toolbar"><span class="table-title"><i class="fas fa-calendar me-2 text-primary"></i>Monthly Summary</span></div>
+        <div id="monthlyWrap">
+          <table class="travel-table">
+            <thead><tr><th>Month</th><th style="text-align:right">Trips</th><th style="text-align:right">Total KM</th><th style="text-align:right">Amount (₹)</th><th>Bar</th></tr></thead>
+            <tbody id="monthlyTbody"></tbody>
+          </table>
+        </div>
+        <div id="monthlyEmpty" class="empty-state d-none">
+          <div class="empty-icon"><i class="fas fa-calendar-xmark"></i></div><p>No data.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Table -->
+  <div class="table-wrapper">
+    <div class="table-toolbar">
+      <span class="table-title"><i class="fas fa-list-ul me-2 text-primary"></i>Trip Details</span>
+      <span class="text-muted fs-sm" id="detailCount"></span>
+    </div>
+    <div id="detailWrap" style="overflow-x:auto">
+      <table class="travel-table">
+        <thead>
+          <tr>
+            <th>Date</th><th>Auditor</th><th>From</th><th>To</th>
+            <th style="text-align:right">KM</th>
+            <th style="text-align:right">Rate (₹)</th>
+            <th style="text-align:right">Total (₹)</th>
+            <th>Submitted By</th>
+          </tr>
+        </thead>
+        <tbody id="detailTbody"></tbody>
+        <tfoot id="detailTfoot"></tfoot>
+      </table>
+    </div>
+    <div id="detailEmpty" class="empty-state d-none">
+      <div class="empty-icon"><i class="fas fa-search"></i></div><p>No trips found for the selected filters.</p>
+    </div>
+  </div>
+
+</main>
+
+<!-- Toast -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="appToast" class="toast">
+    <div class="d-flex align-items-center gap-2 p-3">
+      <i class="fas fa-check-circle"></i>
+      <span id="toastMsg"></span>
+      <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .cat-bar-bg { height:8px;border-radius:4px;background:#e2e8f0;overflow:hidden;min-width:60px; }
+  .cat-bar-fill { height:100%;border-radius:4px;background:var(--accent);transition:width .4s; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+var CONFIG = {
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwDQP6uVT0UJCiQkSoQRmRkBy9kewvJ7IhlyZNgNJs2qRX4WSHxXS4lLo6G3J5c_zFUcQ/exec',
+  DEPARTMENT_NAME: 'My Department'
+};
+</script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+  App.setActiveNav();
+
+  const MONTHS = ['','January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+
+  // Populate year dropdown
+  const yearSel = document.getElementById('fYear');
+  const thisYear = new Date().getFullYear();
+  yearSel.innerHTML = '<option value="all">All Years</option>';
+  for (let y = thisYear + 1; y >= thisYear - 4; y--) {
+    yearSel.innerHTML += `<option value="${y}" ${y === thisYear ? 'selected' : ''}>${y}</option>`;
+  }
+
+  // ── Bootstrap ─────────────────────────────────────────────
+  (async () => {
+    App.showLoader('Loading travel report…');
+    try {
+      await DataManager.init();
+      App.hideLoader();
+      if (DataManager._noConfig) { App.showConfigBanner(); return; }
+      document.getElementById('deptName').textContent =
+        DataManager.getData()?.fund?.departmentName || CONFIG.DEPARTMENT_NAME;
+      App.updatePendingBadge();
+      populateAuditors();
+      renderReport();
+    } catch (e) {
+      App.hideLoader();
+      App.showError('Could not load data: ' + e.message);
+    }
+  })();
+
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !DataManager._noConfig) doRefresh(true);
+  });
+
+  // ── Populate auditor dropdown ─────────────────────────────
+  function populateAuditors() {
+    const all      = DataManager.getData()?.travelExpenses || [];
+    const auditors = [...new Set(all.map(t => t.auditor).filter(Boolean))].sort();
+    const sel      = document.getElementById('fAuditor');
+    sel.innerHTML  = '<option value="all">All Auditors</option>';
+    auditors.forEach(a => { sel.innerHTML += `<option value="${a}">${a}</option>`; });
+  }
+
+  // ── Filters ───────────────────────────────────────────────
+  function getFiltered() {
+    const month   = document.getElementById('fMonth').value;
+    const year    = document.getElementById('fYear').value;
+    const auditor = document.getElementById('fAuditor').value;
+
+    return (DataManager.getData()?.travelExpenses || []).filter(t => {
+      if (month   !== 'all' && parseInt(t.month)  !== parseInt(month))   return false;
+      if (year    !== 'all' && parseInt(t.year)   !== parseInt(year))    return false;
+      if (auditor !== 'all' && t.auditor !== auditor)                    return false;
+      return true;
+    });
+  }
+
+  function clearFilters() {
+    document.getElementById('fMonth').value   = 'all';
+    document.getElementById('fYear').value    = 'all';
+    document.getElementById('fAuditor').value = 'all';
+    renderReport();
+  }
+
+  // ── Render ────────────────────────────────────────────────
+  function renderReport() {
+    const txs = getFiltered();
+
+    const totalKm  = txs.reduce((s, t) => s + t.km, 0);
+    const totalAmt = txs.reduce((s, t) => s + t.total, 0);
+    const auditors = [...new Set(txs.map(t => t.auditor).filter(Boolean))];
+
+    document.getElementById('rTotalKm').textContent    = totalKm.toFixed(1) + ' km';
+    document.getElementById('rTotalAmt').textContent   = App.fmt(totalAmt);
+    document.getElementById('rTotalTrips').textContent = txs.length;
+    document.getElementById('rAuditorCount').textContent = auditors.length;
+
+    // Update print header
+    const month   = document.getElementById('fMonth').value;
+    const year    = document.getElementById('fYear').value;
+    const auditor = document.getElementById('fAuditor').value;
+    const periodStr  = month !== 'all' ? `${MONTHS[parseInt(month)]} ${year !== 'all' ? year : ''}` : (year !== 'all' ? year : 'All Time');
+    const auditorStr = auditor !== 'all' ? `Auditor: ${auditor}` : 'All Auditors';
+    document.getElementById('printTitle').textContent    = 'Travel Expense Report';
+    document.getElementById('printSubtitle').textContent = `${periodStr} | ${auditorStr} | Total: ₹${totalAmt.toFixed(2)}`;
+
+    renderAuditorSummary(txs);
+    renderMonthlySummary(txs);
+    renderDetail(txs);
+  }
+
+  // ── Auditor Summary ───────────────────────────────────────
+  function renderAuditorSummary(txs) {
+    const map = {};
+    txs.forEach(t => {
+      const a = t.auditor || 'Unknown';
+      if (!map[a]) map[a] = { trips: 0, km: 0, amt: 0 };
+      map[a].trips++;
+      map[a].km  += t.km;
+      map[a].amt += t.total;
+    });
+
+    const rows  = Object.entries(map).sort((a, b) => b[1].amt - a[1].amt);
+    const wrap  = document.getElementById('auditorWrap');
+    const empty = document.getElementById('auditorEmpty');
+
+    if (!rows.length) { wrap.style.display='none'; empty.classList.remove('d-none'); return; }
+    wrap.style.display = ''; empty.classList.add('d-none');
+
+    const maxAmt = rows[0][1].amt;
+    document.getElementById('auditorTbody').innerHTML = rows.map(([name, d]) => {
+      const barW = maxAmt > 0 ? ((d.amt / maxAmt) * 100).toFixed(1) : 0;
+      return `<tr>
+        <td style="font-weight:600">${name}</td>
+        <td style="text-align:right">${d.trips}</td>
+        <td style="text-align:right"><span class="km-badge">${d.km.toFixed(1)}</span></td>
+        <td style="text-align:right;color:var(--danger);font-weight:600">${App.fmt(d.amt)}</td>
+        <td style="min-width:70px"><div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${barW}%"></div></div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── Monthly Summary ───────────────────────────────────────
+  function renderMonthlySummary(txs) {
+    const map = {};
+    txs.forEach(t => {
+      const key = `${t.year}-${String(t.month).padStart(2,'0')}`;
+      if (!map[key]) map[key] = { label: `${MONTHS[parseInt(t.month)] || t.month} ${t.year}`, trips: 0, km: 0, amt: 0 };
+      map[key].trips++;
+      map[key].km  += t.km;
+      map[key].amt += t.total;
+    });
+
+    const rows  = Object.entries(map).sort((a, b) => b[0].localeCompare(a[0]));
+    const wrap  = document.getElementById('monthlyWrap');
+    const empty = document.getElementById('monthlyEmpty');
+
+    if (!rows.length) { wrap.style.display='none'; empty.classList.remove('d-none'); return; }
+    wrap.style.display = ''; empty.classList.add('d-none');
+
+    const maxAmt = Math.max(...rows.map(r => r[1].amt), 1);
+    document.getElementById('monthlyTbody').innerHTML = rows.map(([key, d]) => {
+      const barW = ((d.amt / maxAmt) * 100).toFixed(1);
+      return `<tr>
+        <td style="white-space:nowrap;font-size:13px">${d.label}</td>
+        <td style="text-align:right">${d.trips}</td>
+        <td style="text-align:right"><span class="km-badge">${d.km.toFixed(1)}</span></td>
+        <td style="text-align:right;color:var(--danger);font-weight:600">${App.fmt(d.amt)}</td>
+        <td style="min-width:70px"><div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${barW}%;background:var(--danger)"></div></div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── Detail Table ──────────────────────────────────────────
+  function renderDetail(txs) {
+    const wrap  = document.getElementById('detailWrap');
+    const empty = document.getElementById('detailEmpty');
+    const tfoot = document.getElementById('detailTfoot');
+    document.getElementById('detailCount').textContent = `${txs.length} trip${txs.length!==1?'s':''}`;
+
+    if (!txs.length) { wrap.style.display='none'; empty.classList.remove('d-none'); tfoot.innerHTML=''; return; }
+    wrap.style.display = ''; empty.classList.add('d-none');
+
+    const totalKm  = txs.reduce((s, t) => s + t.km, 0);
+    const totalAmt = txs.reduce((s, t) => s + t.total, 0);
+
+    // Sort by date ascending for printing
+    const sorted = [...txs].sort((a, b) => a.date > b.date ? 1 : -1);
+
+    document.getElementById('detailTbody').innerHTML = sorted.map(t => `
+      <tr>
+        <td style="white-space:nowrap">${App.fmtDate(t.date)}</td>
+        <td style="font-weight:600">${t.auditor || '—'}</td>
+        <td>${t.from}</td>
+        <td>${t.to}</td>
+        <td style="text-align:right"><span class="km-badge">${parseFloat(t.km).toFixed(1)}</span></td>
+        <td style="text-align:right;color:var(--muted)">₹${parseFloat(t.perKmRate).toFixed(2)}</td>
+        <td style="text-align:right;font-weight:600;color:var(--danger)">₹${parseFloat(t.total).toFixed(2)}</td>
+        <td class="text-muted fs-sm">${t.submittedBy || '—'}</td>
+      </tr>`).join('');
+
+    tfoot.innerHTML = `
+      <tr>
+        <td colspan="4" style="text-align:right;color:var(--muted)">Total</td>
+        <td style="text-align:right"><span class="km-badge">${totalKm.toFixed(1)}</span></td>
+        <td></td>
+        <td style="text-align:right;color:var(--success)">₹${totalAmt.toFixed(2)}</td>
+        <td></td>
+      </tr>`;
+  }
+
+  // ── Export CSV ────────────────────────────────────────────
+  function exportCSV() {
+    const txs = getFiltered();
+    if (!txs.length) { App.toast('No data to export.', 'warning'); return; }
+
+    const headers = ['Date','Auditor','From','To','KM','Per KM Rate (₹)','Total (₹)','Month','Year','Submitted By'];
+    const rows = txs.map(t => [
+      t.date, t.auditor, `"${t.from}"`, `"${t.to}"`,
+      t.km, t.perKmRate, t.total,
+      MONTHS[parseInt(t.month)] || t.month, t.year,
+      t.submittedBy || ''
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const month   = document.getElementById('fMonth').value;
+    const year    = document.getElementById('fYear').value;
+    const auditor = document.getElementById('fAuditor').value;
+    const name = `travel-report-${month !== 'all' ? MONTHS[month] : 'all'}-${year !== 'all' ? year : 'all'}${auditor !== 'all' ? '-' + auditor : ''}.csv`;
+    App.downloadFile(csv, name, 'text/csv;charset=utf-8;');
+    App.toast(`Exported ${txs.length} trips.`);
+  }
+
+  // ── Refresh ───────────────────────────────────────────────
+  async function doRefresh(silent = false) {
+    const icon = document.getElementById('refreshIcon');
+    icon.classList.add('fa-spin');
+    try {
+      await DataManager.refresh();
+      App.updatePendingBadge();
+      populateAuditors();
+      renderReport();
+      if (!silent) App.toast('Refreshed.', 'info');
+    } catch (e) {
+      App.toast('Refresh failed: ' + e.message, 'error');
+    } finally {
+      icon.classList.remove('fa-spin');
+    }
+  }
+</script>
+</body>
+</html>
