@@ -119,7 +119,9 @@
       </div>
       <div class="col-md-3">
         <label class="form-label">Auditor Name</label>
-        <input type="text" class="form-control" id="selAuditor" placeholder="e.g. Ravi Kumar" maxlength="80" />
+        <select class="form-select" id="selAuditor">
+          <option value="">— Select Auditor —</option>
+        </select>
       </div>
       <div class="col-md-2">
         <label class="form-label">Per KM Rate (₹)</label>
@@ -312,6 +314,11 @@ var CONFIG = {
 
   const MONTHS = ['','January','February','March','April','May','June',
                   'July','August','September','October','November','December'];
+
+  // Populate auditor dropdown
+  App.AUDITORS.forEach(a => {
+    document.getElementById('selAuditor').innerHTML += `<option value="${a}">${a}</option>`;
+  });
 
   // Populate year dropdown (5 years back + 2 ahead)
   const yearSel = document.getElementById('selYear');
