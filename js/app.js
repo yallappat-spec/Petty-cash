@@ -147,5 +147,17 @@ const App = {
     'Travel Tickets',
     'Hotel Rent',
     'Other Expenses'
+  ],
+
+  AUDITORS: [
+    'Ganesh',
+    'Rammurthy',
+    'Manjuanth',
+    'Chandan',
+    'Jeevan',
+    'Chandrakanth',
+    'Uday',
+    'Jeethendra',
+    'Yallappa'
   ]
 };

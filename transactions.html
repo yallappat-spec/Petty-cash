@@ -122,6 +122,13 @@
         </div>
 
         <div class="mb-3">
+          <label class="form-label">Auditor <span class="text-danger">*</span></label>
+          <select class="form-select" id="txAuditor">
+            <option value="">— Select auditor —</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
           <label class="form-label">Remarks <span class="text-danger">*</span></label>
           <input type="text" class="form-control" id="txRemarks" placeholder="e.g. Team lunch, office supplies for project…" maxlength="200" />
         </div>
@@ -213,6 +220,12 @@
               </select>
             </div>
             <div class="form-group">
+              <label class="form-label fs-sm">Auditor</label>
+              <select class="form-select form-select-sm" id="fAuditor" onchange="renderHistory()" style="min-width:110px">
+                <option value="all">All Auditors</option>
+              </select>
+            </div>
+            <div class="form-group">
               <label class="form-label fs-sm">Search</label>
               <input type="text" class="form-control form-control-sm" id="fSearch" placeholder="Search…" oninput="renderHistory()" style="width:110px" />
             </div>
@@ -227,7 +240,7 @@
             <thead>
               <tr>
                 <th>Date</th><th>Type</th><th>Category</th><th>Description</th>
-                <th>Remarks</th><th>Submitted By</th><th>Amount</th><th>Bill</th><th>Status</th><th></th>
+                <th>Remarks</th><th>Submitted By</th><th>Auditor</th><th>Amount</th><th>Bill</th><th>Status</th><th></th>
               </tr>
             </thead>
             <tbody id="histTbody"></tbody>
@@ -307,6 +320,12 @@ var CONFIG = {
     document.getElementById('fCategory').innerHTML  += `<option value="${c}">${c}</option>`;
   });
 
+  // Populate auditor dropdowns
+  App.AUDITORS.forEach(a => {
+    document.getElementById('txAuditor').innerHTML  += `<option value="${a}">${a}</option>`;
+    document.getElementById('fAuditor').innerHTML   += `<option value="${a}">${a}</option>`;
+  });
+
   // ── Bootstrap ─────────────────────────────────────────────
   (async () => {
     App.showLoader('Loading transactions…');
@@ -384,6 +403,7 @@ var CONFIG = {
     const date      = document.getElementById('txDate').value;
     const desc      = document.getElementById('txDesc').value.trim();
     const submitter = document.getElementById('txSubmitter').value.trim();
+    const auditor   = document.getElementById('txAuditor').value;
     const remarks   = document.getElementById('txRemarks').value.trim();
     const ref       = document.getElementById('txRef').value.trim();
 
@@ -395,6 +415,7 @@ var CONFIG = {
       ['txDate',      !date],
       ['txDesc',      !desc],
       ['txSubmitter', !submitter],
+      ['txAuditor',   !auditor],
       ['txRemarks',   !remarks]
     ].forEach(([id, invalid]) => {
       document.getElementById(id).classList.toggle('is-invalid', invalid);
@@ -408,7 +429,7 @@ var CONFIG = {
 
     try {
       // Build transaction payload — attach file if present
-      const tx = { type, amount, category: cat, date, description: desc, reference: ref, submittedBy: submitter, remarks };
+      const tx = { type, amount, category: cat, date, description: desc, reference: ref, submittedBy: submitter, auditor, remarks };
       if (_billFile) {
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading bill…';
         tx.fileData = await fileToBase64(_billFile);
@@ -426,6 +447,7 @@ var CONFIG = {
       document.getElementById('txRef').value       = '';
       document.getElementById('txDate').value      = App.todayISO();
       document.getElementById('txCategory').value  = '';
+      document.getElementById('txAuditor').value   = '';
       clearBill({ stopPropagation: () => {} });
       selectType('expense');
       document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
@@ -461,6 +483,7 @@ var CONFIG = {
       type:     document.getElementById('fType').value,
       status:   document.getElementById('fStatus').value,
       category: document.getElementById('fCategory').value,
+      auditor:  document.getElementById('fAuditor').value,
       search:   document.getElementById('fSearch').value
     };
   }
@@ -471,6 +494,7 @@ var CONFIG = {
     document.getElementById('fType').value     = 'all';
     document.getElementById('fStatus').value   = 'all';
     document.getElementById('fCategory').value = 'all';
+    document.getElementById('fAuditor').value  = 'all';
     document.getElementById('fSearch').value   = '';
     renderHistory();
   }
@@ -494,6 +518,7 @@ var CONFIG = {
       category: filters.category, search: filters.search
     });
     txs = applyMonthYearFilter(txs, filters);
+    if (filters.auditor !== 'all') txs = txs.filter(t => t.auditor === filters.auditor);
 
     const tbody  = document.getElementById('histTbody');
     const empty  = document.getElementById('histEmpty');
@@ -522,6 +547,7 @@ var CONFIG = {
         <td style="max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.description}">${t.description}</td>
         <td style="max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;color:#475569" title="${t.remarks||''}">${t.remarks || '—'}</td>
         <td class="text-muted fs-sm">${t.submittedBy || '—'}</td>
+        <td class="text-muted fs-sm">${t.auditor || '—'}</td>
         <td class="${t.type==='expense'?'amount-expense':'amount-replenish'}" style="white-space:nowrap">
           ${t.type==='expense'?'−':'+'}${App.fmt(t.amount)}
         </td>
@@ -547,13 +573,15 @@ var CONFIG = {
       category: filters.category, search: filters.search
     });
     txs = applyMonthYearFilter(txs, filters);
+    if (filters.auditor !== 'all') txs = txs.filter(t => t.auditor === filters.auditor);
     if (!txs.length) { App.toast('No transactions to export.', 'warning'); return; }
 
     const sorted   = [...txs].sort((a, b) => a.date > b.date ? 1 : -1);
     const dept     = DataManager.getData()?.fund?.departmentName || 'Department';
-    const mLabel   = filters.month !== 'all' ? MONTHS_FULL[parseInt(filters.month)] : 'All Months';
-    const yLabel   = filters.year  !== 'all' ? filters.year : 'All Years';
-    const title    = `Expense Report — ${mLabel} ${yLabel}`;
+    const mLabel   = filters.month   !== 'all' ? MONTHS_FULL[parseInt(filters.month)] : 'All Months';
+    const yLabel   = filters.year    !== 'all' ? filters.year    : 'All Years';
+    const aLabel   = filters.auditor !== 'all' ? filters.auditor : 'All Auditors';
+    const title    = `Expense Report — ${mLabel} ${yLabel} — ${aLabel}`;
     const totalExp = sorted.filter(t=>t.type==='expense'&&t.status==='approved').reduce((s,t)=>s+t.amount,0);
     const totalRep = sorted.filter(t=>t.type==='replenishment'&&t.status==='approved').reduce((s,t)=>s+t.amount,0);
 
@@ -568,6 +596,7 @@ var CONFIG = {
         <td>${t.description}</td>
         <td>${t.remarks || ''}</td>
         <td>${t.submittedBy || ''}</td>
+        <td>${t.auditor || ''}</td>
         <td>${t.reference || ''}</td>
         <td align="right" style="color:${t.type==='expense'?'#dc2626':'#16a34a'};font-weight:bold">
           ${t.type==='expense'?'-':'+'} ${parseFloat(t.amount).toFixed(2)}
@@ -593,27 +622,27 @@ var CONFIG = {
       </head><body>
       <table>
         <tr class="title-row"><td colspan="11">${title}</td></tr>
-        <tr class="info-row"><td colspan="11">Department: ${dept} &nbsp;|&nbsp; Total Expenses (Approved): ₹${totalExp.toFixed(2)} &nbsp;|&nbsp; Total Replenished: ₹${totalRep.toFixed(2)}</td></tr>
+        <tr class="info-row"><td colspan="12">Department: ${dept} &nbsp;|&nbsp; Auditor: ${aLabel} &nbsp;|&nbsp; Total Expenses (Approved): ₹${totalExp.toFixed(2)} &nbsp;|&nbsp; Total Replenished: ₹${totalRep.toFixed(2)}</td></tr>
         <tr><td></td></tr>
         <tr>
           <th>#</th><th>Date</th><th>Type</th><th>Category</th><th>Description</th>
-          <th>Remarks</th><th>Submitted By</th><th>Reference</th><th>Amount (₹)</th><th>Status</th><th>Bill Link</th>
+          <th>Remarks</th><th>Submitted By</th><th>Auditor</th><th>Reference</th><th>Amount (₹)</th><th>Status</th><th>Bill Link</th>
         </tr>
         ${rows}
         <tr class="total-row">
-          <td colspan="8" align="right">Total Approved Expenses</td>
+          <td colspan="9" align="right">Total Approved Expenses</td>
           <td align="right" style="color:#dc2626">- ${totalExp.toFixed(2)}</td>
           <td colspan="2"></td>
         </tr>
         <tr class="total-row">
-          <td colspan="8" align="right">Total Replenished</td>
+          <td colspan="9" align="right">Total Replenished</td>
           <td align="right" style="color:#16a34a">+ ${totalRep.toFixed(2)}</td>
           <td colspan="2"></td>
         </tr>
       </table>
       </body></html>`;
 
-    const safeName = `${mLabel}-${yLabel}`.replace(/\s+/g, '-');
+    const safeName = `${mLabel}-${yLabel}-${aLabel}`.replace(/\s+/g, '-');
     App.downloadFile(html, `Expenses-${safeName}.xls`, 'application/vnd.ms-excel;charset=utf-8;');
     App.toast(`Exported ${sorted.length} transactions to Excel.`, 'success');
   }

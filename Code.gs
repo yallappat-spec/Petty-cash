@@ -12,7 +12,7 @@ const TX_COLS = [
   'id', 'type', 'amount', 'category', 'date',
   'description', 'reference', 'status', 'notes',
   'createdAt', 'actionAt', 'submittedBy',
-  'remarks', 'billUrl'
+  'remarks', 'billUrl', 'auditor'
 ];
 
 const TRAVEL_COLS = [
@@ -158,7 +158,7 @@ function doPost(e) {
       txSheet.appendRow([
         id, tx.type, parseFloat(tx.amount), tx.category, tx.date,
         tx.description, tx.reference || '', 'pending', '', now, '',
-        tx.submittedBy || '', tx.remarks || '', billUrl
+        tx.submittedBy || '', tx.remarks || '', billUrl, tx.auditor || ''
       ]);
       result.id = id;
     }
