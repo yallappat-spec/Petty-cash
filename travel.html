@@ -152,7 +152,21 @@
       <!-- Add Entry Form -->
       <div class="col-lg-4">
         <div class="card p-4">
-          <h6 class="fw-semibold mb-4"><i class="fas fa-plus-circle me-2 text-primary"></i>Add Travel Entry</h6>
+          <h6 class="fw-semibold mb-3"><i class="fas fa-plus-circle me-2 text-primary"></i>Add Travel Entry</h6>
+
+          <!-- Mode Toggle -->
+          <div class="mb-3">
+            <label class="form-label">Travel Mode</label>
+            <div class="d-flex gap-2">
+              <button type="button" class="type-btn active" id="btnKm" onclick="selectMode('km')" style="flex:1;justify-content:center">
+                <i class="fas fa-car me-1"></i> Petrol / KM
+              </button>
+              <button type="button" class="type-btn" id="btnManual" onclick="selectMode('manual')" style="flex:1;justify-content:center">
+                <i class="fas fa-bus me-1"></i> Metro / Bus
+              </button>
+            </div>
+            <input type="hidden" id="txMode" value="km" />
+          </div>
 
           <div class="mb-3">
             <label class="form-label">Date <span class="text-danger">*</span></label>
@@ -166,21 +180,43 @@
             <label class="form-label">To <span class="text-danger">*</span></label>
             <input type="text" class="form-control" id="txTo" placeholder="e.g. RR Nagar" maxlength="100" />
           </div>
-          <div class="mb-3">
-            <label class="form-label">No. of KM <span class="text-danger">*</span></label>
-            <input type="number" class="form-control" id="txKm" placeholder="e.g. 8.3" min="0.1" step="0.1" oninput="calcTotal()" />
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Per KM Rate (₹)</label>
-            <input type="number" class="form-control" id="txRate" min="0" step="0.1" oninput="calcTotal()" readonly style="background:#f8fafc" />
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Total Amount (₹)</label>
-            <div class="input-group">
-              <span class="input-group-text">₹</span>
-              <input type="text" class="form-control fw-semibold" id="txTotal" readonly style="background:#f0fdf4;color:#16a34a;font-size:16px" />
+
+          <!-- KM fields (shown in Petrol mode) -->
+          <div id="kmFields">
+            <div class="mb-3">
+              <label class="form-label">No. of KM <span class="text-danger">*</span></label>
+              <input type="number" class="form-control" id="txKm" placeholder="e.g. 8.3" min="0.1" step="0.1" oninput="calcTotal()" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Per KM Rate (₹)</label>
+              <input type="number" class="form-control" id="txRate" min="0" step="0.1" oninput="calcTotal()" readonly style="background:#f8fafc" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Total Amount (₹)</label>
+              <div class="input-group">
+                <span class="input-group-text">₹</span>
+                <input type="text" class="form-control fw-semibold" id="txTotal" readonly style="background:#f0fdf4;color:#16a34a;font-size:16px" />
+              </div>
             </div>
           </div>
+
+          <!-- Manual amount (shown in Metro/Bus mode) -->
+          <div id="manualFields" style="display:none">
+            <div class="mb-3">
+              <label class="form-label">Amount (₹) <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text">₹</span>
+                <input type="number" class="form-control fw-semibold" id="txManualAmt" placeholder="e.g. 45" min="0.01" step="0.01" style="font-size:16px" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Remark (always visible) -->
+          <div class="mb-4">
+            <label class="form-label">Remark <span class="text-muted">(optional)</span></label>
+            <input type="text" class="form-control" id="txRemark" placeholder="e.g. Client visit, site inspection…" maxlength="150" />
+          </div>
+
           <button class="btn btn-primary w-100" id="addBtn" onclick="addEntry()">
             <i class="fas fa-plus me-2"></i>Add Entry
           </button>
@@ -202,11 +238,13 @@
               <thead>
                 <tr>
                   <th>Date</th>
+                  <th>Mode</th>
                   <th>From</th>
                   <th>To</th>
                   <th style="text-align:right">KM</th>
                   <th style="text-align:right">Rate (₹)</th>
                   <th style="text-align:right">Total (₹)</th>
+                  <th>Remark</th>
                   <th></th>
                 </tr>
               </thead>
@@ -305,6 +343,24 @@ var CONFIG = {
     if (document.visibilityState === 'visible' && !DataManager._noConfig) doRefresh(true);
   });
 
+  // ── Mode Toggle ───────────────────────────────────────────
+  function selectMode(mode) {
+    document.getElementById('txMode').value = mode;
+    document.getElementById('btnKm').classList.toggle('active', mode === 'km');
+    document.getElementById('btnManual').classList.toggle('active', mode === 'manual');
+    document.getElementById('kmFields').style.display     = mode === 'km'     ? '' : 'none';
+    document.getElementById('manualFields').style.display = mode === 'manual' ? '' : 'none';
+    // Clear the hidden side's values to avoid confusion
+    if (mode === 'km') {
+      document.getElementById('txManualAmt').value = '';
+      document.getElementById('txManualAmt').classList.remove('is-invalid');
+    } else {
+      document.getElementById('txKm').value   = '';
+      document.getElementById('txTotal').value = '';
+      document.getElementById('txKm').classList.remove('is-invalid');
+    }
+  }
+
   // ── Session ───────────────────────────────────────────────
   function applySession() {
     const month   = document.getElementById('selMonth').value;
@@ -352,20 +408,40 @@ var CONFIG = {
 
   // ── Add Entry ─────────────────────────────────────────────
   async function addEntry() {
-    const date = document.getElementById('txDate').value;
-    const from = document.getElementById('txFrom').value.trim();
-    const to   = document.getElementById('txTo').value.trim();
-    const km   = document.getElementById('txKm').value;
-    const rate = document.getElementById('txRate').value;
+    const date   = document.getElementById('txDate').value;
+    const from   = document.getElementById('txFrom').value.trim();
+    const to     = document.getElementById('txTo').value.trim();
+    const remark = document.getElementById('txRemark').value.trim();
+    const mode   = document.getElementById('txMode').value;
 
-    // Validate
+    let km, perKmRate, total;
     let valid = true;
-    [['txDate', !date], ['txFrom', !from], ['txTo', !to],
-     ['txKm', !km || parseFloat(km) <= 0]
-    ].forEach(([id, inv]) => {
+
+    // Common field validation
+    [['txDate', !date], ['txFrom', !from], ['txTo', !to]].forEach(([id, inv]) => {
       document.getElementById(id).classList.toggle('is-invalid', inv);
       if (inv) valid = false;
     });
+
+    if (mode === 'km') {
+      const kmVal   = document.getElementById('txKm').value;
+      const rateVal = document.getElementById('txRate').value;
+      const kmInv   = !kmVal || parseFloat(kmVal) <= 0;
+      document.getElementById('txKm').classList.toggle('is-invalid', kmInv);
+      if (kmInv) valid = false;
+      km        = parseFloat(kmVal)   || 0;
+      perKmRate = parseFloat(rateVal) || 0;
+      total     = parseFloat((km * perKmRate).toFixed(2));
+    } else {
+      const amtVal = document.getElementById('txManualAmt').value;
+      const amtInv = !amtVal || parseFloat(amtVal) <= 0;
+      document.getElementById('txManualAmt').classList.toggle('is-invalid', amtInv);
+      if (amtInv) valid = false;
+      km        = 0;
+      perKmRate = 0;
+      total     = parseFloat(parseFloat(amtVal || 0).toFixed(2));
+    }
+
     if (!valid) return;
 
     const btn = document.getElementById('addBtn');
@@ -376,20 +452,24 @@ var CONFIG = {
       await DataManager._post({
         action: 'addTravelExpense',
         expense: {
-          date, from, to, km, perKmRate: rate,
-          auditor: session.auditor,
-          month:   session.month,
-          year:    session.year,
-          submittedBy: ''
+          date, from, to, km, perKmRate, total,
+          auditor:     session.auditor,
+          month:       session.month,
+          year:        session.year,
+          submittedBy: '',
+          remark,
+          mode
         }
       });
       await DataManager.refresh();
 
-      // Reset form (keep date, rate, submitter)
-      document.getElementById('txFrom').value = '';
-      document.getElementById('txTo').value   = '';
-      document.getElementById('txKm').value   = '';
-      document.getElementById('txTotal').value = '';
+      // Reset form fields (keep date & rate)
+      document.getElementById('txFrom').value      = '';
+      document.getElementById('txTo').value        = '';
+      document.getElementById('txKm').value        = '';
+      document.getElementById('txTotal').value     = '';
+      document.getElementById('txManualAmt').value = '';
+      document.getElementById('txRemark').value    = '';
       document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
 
       App.toast('Entry added!', 'success');
@@ -431,31 +511,46 @@ var CONFIG = {
     empty.style.display = 'none';
     document.getElementById('exportBtn').style.display = '';
 
-    const totalKm  = all.reduce((s, t) => s + t.km, 0);
+    const isManual = t => t.mode === 'manual' || (parseFloat(t.km) === 0 && parseFloat(t.perKmRate) === 0);
+    const totalKm  = all.filter(t => !isManual(t)).reduce((s, t) => s + t.km, 0);
     const totalAmt = all.reduce((s, t) => s + t.total, 0);
 
-    tbody.innerHTML = all.map(t => `
+    tbody.innerHTML = all.map(t => {
+      const manual = isManual(t);
+      const modeBadge = manual
+        ? `<span style="background:#f0fdf4;color:#16a34a;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600"><i class="fas fa-bus me-1"></i>Metro/Bus</span>`
+        : `<span class="km-badge"><i class="fas fa-car me-1"></i>Petrol</span>`;
+      const kmCell = manual
+        ? `<td style="text-align:right;color:#94a3b8">—</td>`
+        : `<td style="text-align:right"><span class="km-badge">${parseFloat(t.km).toFixed(1)}</span></td>`;
+      const rateCell = manual
+        ? `<td style="text-align:right;color:#94a3b8">—</td>`
+        : `<td style="text-align:right">₹${parseFloat(t.perKmRate).toFixed(2)}</td>`;
+      return `
       <tr>
         <td style="white-space:nowrap">${App.fmtDate(t.date)}</td>
+        <td>${modeBadge}</td>
         <td>${t.from}</td>
         <td>${t.to}</td>
-        <td style="text-align:right"><span class="km-badge">${parseFloat(t.km).toFixed(1)}</span></td>
-        <td style="text-align:right">₹${parseFloat(t.perKmRate).toFixed(2)}</td>
+        ${kmCell}
+        ${rateCell}
         <td style="text-align:right;font-weight:600;color:var(--danger)">₹${parseFloat(t.total).toFixed(2)}</td>
+        <td style="color:#64748b;font-size:12px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.remark || ''}">${t.remark || '—'}</td>
         <td>
           <button class="btn btn-sm btn-icon" style="color:var(--danger)" title="Delete" onclick="confirmDelete('${t.id}')">
             <i class="fas fa-trash"></i>
           </button>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
 
     tfoot.innerHTML = `
       <tr class="total-row">
-        <td colspan="3" style="text-align:right;color:var(--muted)">Total</td>
+        <td colspan="4" style="text-align:right;color:var(--muted)">Total</td>
         <td style="text-align:right"><span class="km-badge">${totalKm.toFixed(1)}</span></td>
         <td></td>
         <td style="text-align:right;color:var(--success)">₹${totalAmt.toFixed(2)}</td>
-        <td></td>
+        <td colspan="2"></td>
       </tr>`;
   }
 
@@ -507,24 +602,29 @@ var CONFIG = {
     );
     if (!all.length) { App.toast('No entries to export.', 'warning'); return; }
 
+    const isManual = t => t.mode === 'manual' || (parseFloat(t.km) === 0 && parseFloat(t.perKmRate) === 0);
     const sorted    = [...all].sort((a, b) => a.date > b.date ? 1 : -1);
-    const totalKm   = sorted.reduce((s, t) => s + t.km,    0);
+    const totalKm   = sorted.filter(t => !isManual(t)).reduce((s, t) => s + t.km, 0);
     const totalAmt  = sorted.reduce((s, t) => s + t.total, 0);
     const dept      = DataManager.getData()?.fund?.departmentName || 'Department';
     const title     = `Petrol / Travel Expense — ${MONTHS[session.month]} ${session.year}`;
     const auditor   = session.auditor;
 
-    // Build HTML table (Excel opens .xls HTML tables natively)
-    const rows = sorted.map((t, i) => `
+    const rows = sorted.map((t, i) => {
+      const manual = isManual(t);
+      return `
       <tr>
         <td>${i + 1}</td>
         <td>${App.fmtDate(t.date)}</td>
+        <td>${manual ? 'Metro/Bus' : 'Petrol/KM'}</td>
         <td>${t.from}</td>
         <td>${t.to}</td>
-        <td align="right">${parseFloat(t.km).toFixed(1)}</td>
-        <td align="right">${parseFloat(t.perKmRate).toFixed(2)}</td>
+        <td align="right">${manual ? '—' : parseFloat(t.km).toFixed(1)}</td>
+        <td align="right">${manual ? '—' : parseFloat(t.perKmRate).toFixed(2)}</td>
         <td align="right"><b>${parseFloat(t.total).toFixed(2)}</b></td>
-      </tr>`).join('');
+        <td>${t.remark || ''}</td>
+      </tr>`;
+    }).join('');
 
     const html = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -542,19 +642,20 @@ var CONFIG = {
       </style>
       </head><body>
       <table>
-        <tr class="title-row"><td colspan="7">${title}</td></tr>
-        <tr class="info-row"><td colspan="7">Auditor: ${auditor} &nbsp;|&nbsp; Department: ${dept}</td></tr>
+        <tr class="title-row"><td colspan="9">${title}</td></tr>
+        <tr class="info-row"><td colspan="9">Auditor: ${auditor} &nbsp;|&nbsp; Department: ${dept}</td></tr>
         <tr><td></td></tr>
         <tr>
-          <th>#</th><th>Date</th><th>From</th><th>To</th>
-          <th>No. of KM</th><th>Per KM (₹)</th><th>Total (₹)</th>
+          <th>#</th><th>Date</th><th>Mode</th><th>From</th><th>To</th>
+          <th>No. of KM</th><th>Per KM (₹)</th><th>Total (₹)</th><th>Remark</th>
         </tr>
         ${rows}
         <tr class="total-row">
-          <td colspan="4" align="right">Total</td>
+          <td colspan="5" align="right">Total</td>
           <td align="right">${totalKm.toFixed(1)}</td>
           <td></td>
           <td align="right">${totalAmt.toFixed(2)}</td>
+          <td></td>
         </tr>
       </table>
       </body></html>`;

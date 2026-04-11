@@ -16,7 +16,8 @@ const TX_COLS = [
 
 const TRAVEL_COLS = [
   'id', 'date', 'from', 'to', 'km', 'perKmRate',
-  'total', 'auditor', 'month', 'year', 'submittedBy', 'createdAt'
+  'total', 'auditor', 'month', 'year', 'submittedBy', 'createdAt',
+  'remark', 'mode'
 ];
 
 // ── Sheet initialisation ─────────────────────────────────────
@@ -172,7 +173,8 @@ function doPost(e) {
         id, t.date, t.from, t.to,
         km, perKmRate, total,
         t.auditor || '', t.month || '', t.year || '',
-        t.submittedBy || '', now
+        t.submittedBy || '', now,
+        t.remark || '', t.mode || 'km'
       ]);
       result.id    = id;
       result.total = total;
