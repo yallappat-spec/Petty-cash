@@ -121,9 +121,37 @@
           <input type="text" class="form-control" id="txSubmitter" placeholder="Your name" maxlength="80" />
         </div>
 
-        <div class="mb-4">
+        <div class="mb-3">
+          <label class="form-label">Remarks <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="txRemarks" placeholder="e.g. Team lunch, office supplies for project…" maxlength="200" />
+        </div>
+
+        <div class="mb-3">
           <label class="form-label">Bill / Voucher Reference <span class="text-muted">(optional)</span></label>
           <input type="text" class="form-control" id="txRef" placeholder="e.g. INV-2024-001" maxlength="60" />
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label">Bill Attachment <span class="text-muted">(optional — photo or PDF)</span></label>
+          <div class="bill-upload-area" id="billUploadArea" onclick="document.getElementById('txBillFile').click()">
+            <input type="file" id="txBillFile" accept="image/*,.pdf" style="display:none" onchange="onFileSelected(this)" />
+            <div id="billUploadPrompt">
+              <i class="fas fa-cloud-upload-alt" style="font-size:22px;color:#94a3b8;margin-bottom:6px"></i>
+              <div style="font-size:13px;color:#64748b">Click to attach bill / receipt</div>
+              <div style="font-size:11px;color:#94a3b8;margin-top:2px">Image or PDF, max 5 MB</div>
+            </div>
+            <div id="billUploadPreview" style="display:none;align-items:center;gap:10px">
+              <i class="fas fa-file-alt" style="font-size:20px;color:#2563eb"></i>
+              <div style="flex:1;min-width:0">
+                <div id="billFileName" style="font-size:13px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+                <div id="billFileSize" style="font-size:11px;color:#64748b"></div>
+              </div>
+              <button type="button" class="btn btn-sm" style="color:var(--danger);padding:2px 8px;font-size:12px" onclick="clearBill(event)">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+          <div id="billUploadError" style="display:none;font-size:12px;color:var(--danger);margin-top:4px"></div>
         </div>
 
         <button class="btn btn-primary w-100" id="submitBtn" onclick="submitTransaction()">
@@ -188,7 +216,7 @@
             <thead>
               <tr>
                 <th>Date</th><th>Type</th><th>Category</th><th>Description</th>
-                <th>Submitted By</th><th>Ref</th><th>Amount</th><th>Status</th><th></th>
+                <th>Remarks</th><th>Submitted By</th><th>Amount</th><th>Bill</th><th>Status</th><th></th>
               </tr>
             </thead>
             <tbody id="histTbody"></tbody>
@@ -240,6 +268,13 @@
   .type-btn.active                { border-color:var(--accent);  background:#eff6ff; color:var(--accent);  }
   #btnExpense.active              { border-color:var(--danger);  background:#fef2f2; color:var(--danger);  }
   #btnReplenish.active            { border-color:var(--success); background:#f0fdf4; color:var(--success); }
+  .bill-upload-area {
+    border: 1.5px dashed #cbd5e1; border-radius: 10px; padding: 16px;
+    text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+    display: flex; align-items: center; justify-content: center; min-height: 72px;
+  }
+  .bill-upload-area:hover { border-color: #2563eb; background: #f0f7ff; }
+  .bill-upload-area.has-file { border-style: solid; border-color: #2563eb; background: #f0f7ff; cursor: default; }
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -291,6 +326,45 @@ var CONFIG = {
     if (type === 'replenishment') document.getElementById('txCategory').value = '';
   }
 
+  // ── Bill file helpers ─────────────────────────────────────
+  let _billFile = null;
+
+  function onFileSelected(input) {
+    const file = input.files[0];
+    document.getElementById('billUploadError').style.display = 'none';
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      document.getElementById('billUploadError').textContent = 'File too large. Maximum size is 5 MB.';
+      document.getElementById('billUploadError').style.display = '';
+      input.value = '';
+      return;
+    }
+    _billFile = file;
+    document.getElementById('billFileName').textContent = file.name;
+    document.getElementById('billFileSize').textContent = (file.size / 1024).toFixed(0) + ' KB';
+    document.getElementById('billUploadPrompt').style.display = 'none';
+    document.getElementById('billUploadPreview').style.display = 'flex';
+    document.getElementById('billUploadArea').classList.add('has-file');
+  }
+
+  function clearBill(e) {
+    e.stopPropagation();
+    _billFile = null;
+    document.getElementById('txBillFile').value = '';
+    document.getElementById('billUploadPrompt').style.display = '';
+    document.getElementById('billUploadPreview').style.display = 'none';
+    document.getElementById('billUploadArea').classList.remove('has-file');
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
   // ── Submit ────────────────────────────────────────────────
   async function submitTransaction() {
     const type      = document.getElementById('txType').value;
@@ -299,6 +373,7 @@ var CONFIG = {
     const date      = document.getElementById('txDate').value;
     const desc      = document.getElementById('txDesc').value.trim();
     const submitter = document.getElementById('txSubmitter').value.trim();
+    const remarks   = document.getElementById('txRemarks').value.trim();
     const ref       = document.getElementById('txRef').value.trim();
 
     // Validate
@@ -308,7 +383,8 @@ var CONFIG = {
       ['txCategory',  type !== 'replenishment' && !cat],
       ['txDate',      !date],
       ['txDesc',      !desc],
-      ['txSubmitter', !submitter]
+      ['txSubmitter', !submitter],
+      ['txRemarks',   !remarks]
     ].forEach(([id, invalid]) => {
       document.getElementById(id).classList.toggle('is-invalid', invalid);
       if (invalid) valid = false;
@@ -320,14 +396,26 @@ var CONFIG = {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting…';
 
     try {
-      await DataManager.addTransaction({ type, amount, category: cat, date, description: desc, reference: ref, submittedBy: submitter });
+      // Build transaction payload — attach file if present
+      const tx = { type, amount, category: cat, date, description: desc, reference: ref, submittedBy: submitter, remarks };
+      if (_billFile) {
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading bill…';
+        tx.fileData = await fileToBase64(_billFile);
+        tx.fileName = _billFile.name;
+        tx.fileType = _billFile.type;
+      }
+
+      await DataManager.addTransaction(tx);
       App.toast('Submitted! Go to Approvals to review.', 'success');
+
       // Reset form
       document.getElementById('txAmount').value    = '';
       document.getElementById('txDesc').value      = '';
+      document.getElementById('txRemarks').value   = '';
       document.getElementById('txRef').value       = '';
       document.getElementById('txDate').value      = App.todayISO();
       document.getElementById('txCategory').value  = '';
+      clearBill({ stopPropagation: () => {} });
       selectType('expense');
       document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
       App.updatePendingBadge();
@@ -381,11 +469,16 @@ var CONFIG = {
         <td style="white-space:nowrap">${App.fmtDate(t.date)}</td>
         <td>${App.typeBadge(t.type)}</td>
         <td style="font-size:13px;white-space:nowrap">${t.category}</td>
-        <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.description}">${t.description}</td>
+        <td style="max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.description}">${t.description}</td>
+        <td style="max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;color:#475569" title="${t.remarks||''}">${t.remarks || '—'}</td>
         <td class="text-muted fs-sm">${t.submittedBy || '—'}</td>
-        <td class="text-muted fs-sm">${t.reference || '—'}</td>
         <td class="${t.type==='expense'?'amount-expense':'amount-replenish'}" style="white-space:nowrap">
           ${t.type==='expense'?'−':'+'}${App.fmt(t.amount)}
+        </td>
+        <td>
+          ${t.billUrl
+            ? `<a href="${t.billUrl}" target="_blank" title="View Bill" style="color:#2563eb;font-size:18px"><i class="fas fa-file-image"></i></a>`
+            : '<span style="color:#cbd5e1;font-size:13px">—</span>'}
         </td>
         <td>${App.statusBadge(t.status)}</td>
         <td>

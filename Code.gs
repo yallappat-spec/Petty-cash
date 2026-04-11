@@ -11,7 +11,8 @@ const TRAVEL_SHEET = 'TravelExpenses';
 const TX_COLS = [
   'id', 'type', 'amount', 'category', 'date',
   'description', 'reference', 'status', 'notes',
-  'createdAt', 'actionAt', 'submittedBy'
+  'createdAt', 'actionAt', 'submittedBy',
+  'remarks', 'billUrl'
 ];
 
 const TRAVEL_COLS = [
@@ -138,10 +139,26 @@ function doPost(e) {
       const tx  = body.transaction;
       const id  = Date.now().toString();
       const now = new Date().toISOString();
+
+      // Upload bill attachment to Google Drive if provided
+      let billUrl = '';
+      if (tx.fileData && tx.fileName) {
+        try {
+          const folder = getOrCreateFolder_('PettyCash Bills');
+          const decoded = Utilities.base64Decode(tx.fileData);
+          const blob = Utilities.newBlob(decoded, tx.fileType || 'application/octet-stream', tx.fileName);
+          const file = folder.createFile(blob);
+          file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+          billUrl = file.getUrl();
+        } catch(e) {
+          // non-fatal — save transaction without bill
+        }
+      }
+
       txSheet.appendRow([
         id, tx.type, parseFloat(tx.amount), tx.category, tx.date,
         tx.description, tx.reference || '', 'pending', '', now, '',
-        tx.submittedBy || ''
+        tx.submittedBy || '', tx.remarks || '', billUrl
       ]);
       result.id = id;
     }
@@ -237,4 +254,9 @@ function updateRow_(sheet, id, cols, updates) {
 function deleteRow_(sheet, id) {
   const rowNum = findRow_(sheet, id);
   if (rowNum > 0) sheet.deleteRow(rowNum);
+}
+
+function getOrCreateFolder_(name) {
+  const folders = DriveApp.getFoldersByName(name);
+  return folders.hasNext() ? folders.next() : DriveApp.createFolder(name);
 }

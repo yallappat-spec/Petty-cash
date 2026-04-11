@@ -142,13 +142,10 @@ const App = {
   // ── Categories ────────────────────────────────────────────
 
   CATEGORIES: [
-    'Office Supplies',
-    'Travel & Transport',
-    'Food & Beverages',
-    'Utilities',
-    'Maintenance & Repairs',
-    'Postage & Courier',
-    'Medical & First Aid',
-    'Miscellaneous'
+    'Food',
+    'Local Travel',
+    'Travel Tickets',
+    'Hotel Rent',
+    'Other Expenses'
   ]
 };
