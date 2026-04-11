@@ -117,11 +117,6 @@
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Submitted By <span class="text-danger">*</span></label>
-          <input type="text" class="form-control" id="txSubmitter" placeholder="Your name" maxlength="80" />
-        </div>
-
-        <div class="mb-3">
           <label class="form-label">Auditor <span class="text-danger">*</span></label>
           <select class="form-select" id="txAuditor">
             <option value="">— Select auditor —</option>
@@ -402,7 +397,6 @@ var CONFIG = {
     const cat       = type === 'replenishment' ? 'Replenishment' : document.getElementById('txCategory').value;
     const date      = document.getElementById('txDate').value;
     const desc      = document.getElementById('txDesc').value.trim();
-    const submitter = document.getElementById('txSubmitter').value.trim();
     const auditor   = document.getElementById('txAuditor').value;
     const remarks   = document.getElementById('txRemarks').value.trim();
     const ref       = document.getElementById('txRef').value.trim();
@@ -414,7 +408,6 @@ var CONFIG = {
       ['txCategory',  type !== 'replenishment' && !cat],
       ['txDate',      !date],
       ['txDesc',      !desc],
-      ['txSubmitter', !submitter],
       ['txAuditor',   !auditor],
       ['txRemarks',   !remarks]
     ].forEach(([id, invalid]) => {
@@ -429,7 +422,7 @@ var CONFIG = {
 
     try {
       // Build transaction payload — attach file if present
-      const tx = { type, amount, category: cat, date, description: desc, reference: ref, submittedBy: submitter, auditor, remarks };
+      const tx = { type, amount, category: cat, date, description: desc, reference: ref, submittedBy: '', auditor, remarks };
       if (_billFile) {
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading bill…';
         tx.fileData = await fileToBase64(_billFile);
@@ -446,8 +439,8 @@ var CONFIG = {
       document.getElementById('txRemarks').value   = '';
       document.getElementById('txRef').value       = '';
       document.getElementById('txDate').value      = App.todayISO();
-      document.getElementById('txCategory').value  = '';
-      document.getElementById('txAuditor').value   = '';
+      document.getElementById('txCategory').value = '';
+      document.getElementById('txAuditor').value  = '';
       clearBill({ stopPropagation: () => {} });
       selectType('expense');
       document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
