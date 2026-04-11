@@ -7,6 +7,30 @@ const DataManager = {
   _cache:    null,   // in-memory data cache (refreshed on every mutate)
   _noConfig: false,  // true when config.js URL is not filled in
 
+  // ── Session storage cache key ──────────────────────────────
+  _CACHE_KEY: 'pettyCashCache',
+  _CACHE_TTL: 60 * 1000, // 60 seconds — use session cache within this window
+
+  _saveSession(data) {
+    try {
+      sessionStorage.setItem(this._CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+    } catch(e) {}
+  },
+
+  _loadSession() {
+    try {
+      const raw = sessionStorage.getItem(this._CACHE_KEY);
+      if (!raw) return null;
+      const { ts, data } = JSON.parse(raw);
+      if (Date.now() - ts < this._CACHE_TTL) return data;
+    } catch(e) {}
+    return null;
+  },
+
+  _clearSession() {
+    try { sessionStorage.removeItem(this._CACHE_KEY); } catch(e) {}
+  },
+
   // ── Init / Refresh ─────────────────────────────────────────
 
   async init() {
@@ -16,17 +40,24 @@ const DataManager = {
       return;
     }
     this._noConfig = false;
+
+    // Use session cache if fresh — skip the network round-trip
+    const cached = this._loadSession();
+    if (cached) {
+      this._cache = cached;
+      return;
+    }
     await this.refresh();
   },
 
   async refresh() {
     const url = (window.CONFIG || {}).APPS_SCRIPT_URL;
-    // Cache-busting query param so browsers don't serve a stale response
     const resp = await fetch(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now());
     if (!resp.ok) throw new Error(`Server returned ${resp.status}. Check your Apps Script URL.`);
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
     this._cache = data;
+    this._saveSession(data);
     return data;
   },
 
@@ -103,26 +134,31 @@ const DataManager = {
   // ── Async mutations (post → refresh cache) ──────────────────
 
   async addTransaction(tx) {
+    this._clearSession();
     await this._post({ action: 'addTransaction', transaction: tx });
     await this.refresh();
   },
 
   async approveTransaction(id, notes) {
+    this._clearSession();
     await this._post({ action: 'approveTransaction', id, notes: notes || '' });
     await this.refresh();
   },
 
   async rejectTransaction(id, notes) {
+    this._clearSession();
     await this._post({ action: 'rejectTransaction', id, notes: notes || '' });
     await this.refresh();
   },
 
   async deleteTransaction(id) {
+    this._clearSession();
     await this._post({ action: 'deleteTransaction', id });
     await this.refresh();
   },
 
   async updateSettings(settings) {
+    this._clearSession();
     await this._post({ action: 'updateSettings', settings });
     await this.refresh();
   },
