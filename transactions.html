@@ -165,11 +165,30 @@
       <div class="table-wrapper">
         <div class="table-toolbar">
           <span class="table-title">Transaction History</span>
+          <button class="btn btn-outline btn-sm" id="exportBtn" onclick="exportExcel()" style="display:none">
+            <i class="fas fa-file-excel me-1" style="color:#16a34a"></i>Export Excel
+          </button>
         </div>
 
         <!-- Filters -->
         <div style="padding:12px 20px;border-bottom:1px solid var(--border);background:#fafbfc">
           <div class="filters-row">
+            <div class="form-group">
+              <label class="form-label fs-sm">Month</label>
+              <select class="form-select form-select-sm" id="fMonth" onchange="renderHistory()" style="min-width:100px">
+                <option value="all">All Months</option>
+                <option value="1">January</option><option value="2">February</option>
+                <option value="3">March</option><option value="4">April</option>
+                <option value="5">May</option><option value="6">June</option>
+                <option value="7">July</option><option value="8">August</option>
+                <option value="9">September</option><option value="10">October</option>
+                <option value="11">November</option><option value="12">December</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label fs-sm">Year</label>
+              <select class="form-select form-select-sm" id="fYear" onchange="renderHistory()" style="min-width:80px"></select>
+            </div>
             <div class="form-group">
               <label class="form-label fs-sm">Type</label>
               <select class="form-select form-select-sm" id="fType" onchange="renderHistory()">
@@ -194,19 +213,11 @@
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label fs-sm">From</label>
-              <input type="date" class="form-control form-control-sm" id="fFrom" onchange="renderHistory()" />
-            </div>
-            <div class="form-group">
-              <label class="form-label fs-sm">To</label>
-              <input type="date" class="form-control form-control-sm" id="fTo" onchange="renderHistory()" />
-            </div>
-            <div class="form-group">
               <label class="form-label fs-sm">Search</label>
-              <input type="text" class="form-control form-control-sm" id="fSearch" placeholder="Search…" oninput="renderHistory()" style="width:120px" />
+              <input type="text" class="form-control form-control-sm" id="fSearch" placeholder="Search…" oninput="renderHistory()" style="width:110px" />
             </div>
             <div class="form-group" style="margin-top:auto">
-              <button class="btn btn-outline btn-sm" onclick="clearFilters()"><i class="fas fa-rotate-left"></i></button>
+              <button class="btn btn-outline btn-sm" onclick="clearFilters()" title="Clear filters"><i class="fas fa-rotate-left"></i></button>
             </div>
           </div>
         </div>
@@ -429,40 +440,79 @@ var CONFIG = {
   }
 
   // ── History ───────────────────────────────────────────────
+  const MONTHS_FULL = ['','January','February','March','April','May','June',
+                       'July','August','September','October','November','December'];
+
+  // Populate year filter
+  (() => {
+    const sel = document.getElementById('fYear');
+    const now = new Date().getFullYear();
+    sel.innerHTML = '<option value="all">All Years</option>';
+    for (let y = now + 1; y >= now - 4; y--)
+      sel.innerHTML += `<option value="${y}" ${y === now ? 'selected' : ''}>${y}</option>`;
+    // Default month to current
+    document.getElementById('fMonth').value = new Date().getMonth() + 1;
+  })();
+
   function getFilters() {
     return {
+      month:    document.getElementById('fMonth').value,
+      year:     document.getElementById('fYear').value,
       type:     document.getElementById('fType').value,
       status:   document.getElementById('fStatus').value,
       category: document.getElementById('fCategory').value,
-      from:     document.getElementById('fFrom').value,
-      to:       document.getElementById('fTo').value,
       search:   document.getElementById('fSearch').value
     };
   }
 
   function clearFilters() {
+    document.getElementById('fMonth').value    = 'all';
+    document.getElementById('fYear').value     = 'all';
     document.getElementById('fType').value     = 'all';
     document.getElementById('fStatus').value   = 'all';
     document.getElementById('fCategory').value = 'all';
-    document.getElementById('fFrom').value     = '';
-    document.getElementById('fTo').value       = '';
     document.getElementById('fSearch').value   = '';
     renderHistory();
   }
 
+  function applyMonthYearFilter(txs, filters) {
+    const m = filters.month !== 'all' ? parseInt(filters.month) : null;
+    const y = filters.year  !== 'all' ? parseInt(filters.year)  : null;
+    if (!m && !y) return txs;
+    return txs.filter(t => {
+      const d = new Date(t.date + 'T00:00:00');
+      if (m && d.getMonth() + 1 !== m) return false;
+      if (y && d.getFullYear()  !== y) return false;
+      return true;
+    });
+  }
+
   function renderHistory() {
-    const txs    = DataManager.getFilteredTransactions(getFilters());
+    const filters = getFilters();
+    let txs = DataManager.getFilteredTransactions({
+      type: filters.type, status: filters.status,
+      category: filters.category, search: filters.search
+    });
+    txs = applyMonthYearFilter(txs, filters);
+
     const tbody  = document.getElementById('histTbody');
     const empty  = document.getElementById('histEmpty');
     const wrap   = document.getElementById('histTableWrap');
     const footer = document.getElementById('histFooter');
+    const expBtn = document.getElementById('exportBtn');
 
     if (!txs.length) {
       wrap.style.display = 'none'; empty.classList.remove('d-none');
-      footer.textContent = ''; return;
+      footer.textContent = ''; expBtn.style.display = 'none'; return;
     }
     wrap.style.display = ''; empty.classList.add('d-none');
-    footer.textContent = `${txs.length} transaction${txs.length !== 1 ? 's' : ''}`;
+    expBtn.style.display = '';
+
+    const totalExp  = txs.filter(t=>t.type==='expense'&&t.status==='approved').reduce((s,t)=>s+t.amount,0);
+    const totalRep  = txs.filter(t=>t.type==='replenishment'&&t.status==='approved').reduce((s,t)=>s+t.amount,0);
+    footer.innerHTML = `${txs.length} transaction${txs.length!==1?'s':''}`
+      + (totalExp  ? ` &nbsp;·&nbsp; <span style="color:var(--danger)">Expenses: ${App.fmt(totalExp)}</span>`  : '')
+      + (totalRep  ? ` &nbsp;·&nbsp; <span style="color:var(--success)">Replenished: ${App.fmt(totalRep)}</span>` : '');
 
     tbody.innerHTML = txs.map(t => `
       <tr>
@@ -487,6 +537,85 @@ var CONFIG = {
             : ''}
         </td>
       </tr>`).join('');
+  }
+
+  // ── Export Excel ──────────────────────────────────────────
+  function exportExcel() {
+    const filters = getFilters();
+    let txs = DataManager.getFilteredTransactions({
+      type: filters.type, status: filters.status,
+      category: filters.category, search: filters.search
+    });
+    txs = applyMonthYearFilter(txs, filters);
+    if (!txs.length) { App.toast('No transactions to export.', 'warning'); return; }
+
+    const sorted   = [...txs].sort((a, b) => a.date > b.date ? 1 : -1);
+    const dept     = DataManager.getData()?.fund?.departmentName || 'Department';
+    const mLabel   = filters.month !== 'all' ? MONTHS_FULL[parseInt(filters.month)] : 'All Months';
+    const yLabel   = filters.year  !== 'all' ? filters.year : 'All Years';
+    const title    = `Expense Report — ${mLabel} ${yLabel}`;
+    const totalExp = sorted.filter(t=>t.type==='expense'&&t.status==='approved').reduce((s,t)=>s+t.amount,0);
+    const totalRep = sorted.filter(t=>t.type==='replenishment'&&t.status==='approved').reduce((s,t)=>s+t.amount,0);
+
+    const statusColor = { approved:'#16a34a', pending:'#d97706', rejected:'#dc2626' };
+
+    const rows = sorted.map((t, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${App.fmtDate(t.date)}</td>
+        <td>${t.type.charAt(0).toUpperCase()+t.type.slice(1)}</td>
+        <td>${t.category}</td>
+        <td>${t.description}</td>
+        <td>${t.remarks || ''}</td>
+        <td>${t.submittedBy || ''}</td>
+        <td>${t.reference || ''}</td>
+        <td align="right" style="color:${t.type==='expense'?'#dc2626':'#16a34a'};font-weight:bold">
+          ${t.type==='expense'?'-':'+'} ${parseFloat(t.amount).toFixed(2)}
+        </td>
+        <td style="color:${statusColor[t.status]||'#000'}">${t.status.charAt(0).toUpperCase()+t.status.slice(1)}</td>
+        <td>${t.billUrl ? t.billUrl : ''}</td>
+      </tr>`).join('');
+
+    const html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:x="urn:schemas-microsoft-com:office:excel"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head><meta charset="UTF-8">
+      <style>
+        body { font-family: Arial, sans-serif; font-size: 11pt; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 6px 10px; }
+        th { background: #1e293b; color: #fff; font-weight: bold; }
+        .title-row td { background: #eff6ff; font-weight: bold; font-size: 13pt; border: none; }
+        .info-row  td { background: #f8fafc; border: none; font-size: 10pt; color: #555; }
+        .total-row td { background: #f0fdf4; font-weight: bold; }
+      </style>
+      </head><body>
+      <table>
+        <tr class="title-row"><td colspan="11">${title}</td></tr>
+        <tr class="info-row"><td colspan="11">Department: ${dept} &nbsp;|&nbsp; Total Expenses (Approved): ₹${totalExp.toFixed(2)} &nbsp;|&nbsp; Total Replenished: ₹${totalRep.toFixed(2)}</td></tr>
+        <tr><td></td></tr>
+        <tr>
+          <th>#</th><th>Date</th><th>Type</th><th>Category</th><th>Description</th>
+          <th>Remarks</th><th>Submitted By</th><th>Reference</th><th>Amount (₹)</th><th>Status</th><th>Bill Link</th>
+        </tr>
+        ${rows}
+        <tr class="total-row">
+          <td colspan="8" align="right">Total Approved Expenses</td>
+          <td align="right" style="color:#dc2626">- ${totalExp.toFixed(2)}</td>
+          <td colspan="2"></td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="8" align="right">Total Replenished</td>
+          <td align="right" style="color:#16a34a">+ ${totalRep.toFixed(2)}</td>
+          <td colspan="2"></td>
+        </tr>
+      </table>
+      </body></html>`;
+
+    const safeName = `${mLabel}-${yLabel}`.replace(/\s+/g, '-');
+    App.downloadFile(html, `Expenses-${safeName}.xls`, 'application/vnd.ms-excel;charset=utf-8;');
+    App.toast(`Exported ${sorted.length} transactions to Excel.`, 'success');
   }
 
   // ── Delete ────────────────────────────────────────────────
