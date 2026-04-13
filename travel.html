@@ -32,6 +32,22 @@
     .session-tag { background: #f1f5f9; border-radius: 8px; padding: 10px 16px; font-size: 13px; color: #475569; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px; }
     .session-tag strong { color: #1e293b; }
     .rate-input { max-width: 100px; }
+    /* Custom store autocomplete */
+    .ac-wrap { position: relative; }
+    .ac-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 9999;
+      background: #fff; border: 1px solid #cbd5e1; border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.12); max-height: 220px;
+      overflow-y: auto; display: none; margin-top: 2px;
+    }
+    .ac-dropdown.open { display: block; }
+    .ac-item {
+      padding: 9px 14px; font-size: 13px; cursor: pointer; color: #1e293b;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .ac-item:last-child { border-bottom: none; }
+    .ac-item:hover, .ac-item.active { background: #eff6ff; color: #2563eb; }
+    .ac-item mark { background: none; color: #2563eb; font-weight: 700; padding: 0; }
   </style>
 </head>
 <body>
@@ -176,18 +192,24 @@
           </div>
           <div class="mb-3">
             <label class="form-label">From <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="txFrom" placeholder="e.g. HO" maxlength="100" />
+            <div class="ac-wrap">
+              <input type="text" class="form-control" id="txFrom" placeholder="Type store name…" maxlength="150" autocomplete="new-password" />
+              <div class="ac-dropdown" id="acFrom"></div>
+            </div>
           </div>
           <div class="mb-3">
             <label class="form-label">To <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="txTo" placeholder="e.g. RR Nagar" maxlength="100" />
+            <div class="ac-wrap">
+              <input type="text" class="form-control" id="txTo" placeholder="Type store name…" maxlength="150" autocomplete="new-password" />
+              <div class="ac-dropdown" id="acTo"></div>
+            </div>
           </div>
 
           <!-- KM fields (shown in Petrol mode) -->
           <div id="kmFields">
             <div class="mb-3">
-              <label class="form-label">No. of KM <span class="text-danger">*</span></label>
-              <input type="number" class="form-control" id="txKm" placeholder="e.g. 8.3" min="0.1" step="0.1" oninput="calcTotal()" />
+              <label class="form-label">No. of KM <span class="text-danger">*</span> <span id="autoKmBadge" style="display:none;background:#eff6ff;color:#2563eb;font-size:11px;font-weight:600;padding:2px 7px;border-radius:12px;vertical-align:middle"><i class="fas fa-magic me-1"></i>Auto-calculated</span></label>
+              <input type="number" class="form-control" id="txKm" placeholder="e.g. 8.3" min="0.1" step="0.1" oninput="calcTotal(); hideAutoKmBadge()" />
             </div>
             <div class="mb-3">
               <label class="form-label">Per KM Rate (₹)</label>
@@ -306,6 +328,166 @@ var CONFIG = {
 </script>
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
+<script>
+// ── Store Coordinates (lat, lng) ──────────────────────────────────────────────
+const STORE_COORDS = {
+  // Bangalore
+  'BLR - 4TH BLOCK JAYANAGAR':       [12.9255, 77.5835],
+  'BLR - ARS COMPLEX MALLESHWARAM':  [13.0037, 77.5680],
+  'BLR - BASAWESHWAR NAGAR':         [12.9985, 77.5358],
+  'BLR - BEL ROAD':                  [13.0350, 77.5770],
+  'BLR - COMMERCIAL STREET':         [12.9817, 77.6079],
+  'BLR - DVG ROAD':                  [12.9580, 77.5680],
+  'BLR - FORUM SHANTINIKETAN MALL':  [12.9783, 77.7305],
+  'BLR - FORUM SOUTH BANGALORE':     [12.9297, 77.6138],
+  'BLR - GARUDA MALL':               [12.9716, 77.6086],
+  'BLR - HENNUR ROAD':               [13.0460, 77.6350],
+  'BLR - HSR LAYOUT':                [12.9116, 77.6473],
+  'BLR - INDIRANAGAR':               [12.9719, 77.6412],
+  'BLR - JAYNAGAR':                  [12.9350, 77.5830],
+  'BLR - K R PURAM':                 [13.0059, 77.6979],
+  'BLR - KAMMANAHALLI':              [13.0219, 77.6436],
+  'BLR - KATHRIGUPPE':               [12.9465, 77.5520],
+  'BLR - MALL OF ASIA':              [12.8697, 77.6680],
+  'BLR - MALLESWARAM':               [13.0037, 77.5680],
+  'BLR - MANTRI MALL':               [12.9980, 77.5720],
+  'BLR - NEXUS KORAMANGALA MALL':    [12.9338, 77.6190],
+  'BLR - ORION MALL':                [13.0170, 77.5550],
+  'BLR - PHOENIX MALL WHITEFIELD':   [12.9698, 77.7500],
+  'BLR - RMZ MALL':                  [12.9561, 77.6945],
+  'BLR - ROYAL MEENAKSHI MALL':      [12.8894, 77.5960],
+  'BLR - RR NAGAR':                  [12.9342, 77.5224],
+  'BLR - SAHAKARNAGAR':              [13.0499, 77.5904],
+  'BLR - SARJAPUR MAIN ROAD':        [12.8970, 77.6780],
+  'BLR - VEGA CITY MALL':            [12.8938, 77.5960],
+  'BLR - WHITEFIELD MAIN ROAD':      [12.9698, 77.7500],
+  // Chennai
+  'CHN - ADYAR':                     [13.0012, 80.2565],
+  'CHN - EXPRESS AVENUE MALL':       [13.0569, 80.2620],
+  'CHN - MARINA MALL':               [13.0478, 80.2785],
+  'CHN - MOGAPPAIR WEST ROAD':       [13.0869, 80.1680],
+  'CHN - NEXUS VIJAYA MALL':         [13.0302, 80.2109],
+  'CHN - PAPER MILL ROAD':           [13.1010, 80.2350],
+  'CHN - PHOENIX MALL VELACHERY':    [12.9817, 80.2165],
+  'CHN - T NAGAR':                   [13.0418, 80.2341],
+  'CHN - THORAIPAKKAM':              [12.9257, 80.2284],
+  'CHN - VELACHERY BYPASS ROAD':     [12.9780, 80.2200],
+  'CHN - VR MALL':                   [13.0710, 80.2700],
+  // Hyderabad
+  'HYD - AS RAO NAGAR':              [17.4647, 78.5593],
+  'HYD - ATTAPUR':                   [17.3707, 78.4100],
+  'HYD - DSL VIRTUE MALL':           [17.4435, 78.3772],
+  'HYD - JUBILEE HILLS':             [17.4311, 78.4071],
+  'HYD - KOMPALLI':                  [17.3833, 78.5500],
+  'HYD - KOTHAPET':                  [17.3619, 78.5325],
+  'HYD - KUKATPALLY':                [17.4849, 78.3985],
+  'HYD - LAKESHORE MALL':            [17.4256, 78.3750],
+  'HYD - LT MALL':                   [17.3830, 78.4767],
+  'HYD - NALLAGANDLA':               [17.4597, 78.3301],
+  'HYD - NEXUS MALL':                [17.4849, 78.3985],
+  'HYD - PARKLANE':                  [17.3763, 78.4746],
+  'HYD - SARATH CITY MALL':          [17.4907, 78.3913],
+  'HYD - VANATSALIPURAM':            [17.3226, 78.5300],
+};
+
+// Road distance factor (straight-line × 1.3 ≈ road distance)
+const ROAD_FACTOR = 1.3;
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function tryAutoKm() {
+  const from = document.getElementById('txFrom').value.trim().toUpperCase();
+  const to   = document.getElementById('txTo').value.trim().toUpperCase();
+  // Find matching store keys (case-insensitive)
+  const fromKey = Object.keys(STORE_COORDS).find(k => k.toUpperCase() === from);
+  const toKey   = Object.keys(STORE_COORDS).find(k => k.toUpperCase() === to);
+  if (fromKey && toKey && fromKey !== toKey) {
+    const [lat1, lon1] = STORE_COORDS[fromKey];
+    const [lat2, lon2] = STORE_COORDS[toKey];
+    const km = (haversineKm(lat1, lon1, lat2, lon2) * ROAD_FACTOR).toFixed(1);
+    document.getElementById('txKm').value = km;
+    document.getElementById('autoKmBadge').style.display = '';
+    calcTotal();
+  } else {
+    document.getElementById('autoKmBadge').style.display = 'none';
+  }
+}
+
+function hideAutoKmBadge() {
+  document.getElementById('autoKmBadge').style.display = 'none';
+}
+
+// ── Custom Autocomplete ───────────────────────────────────────────────────────
+const STORE_NAMES = Object.keys(STORE_COORDS);
+
+function initAC(inputId, dropId) {
+  const input = document.getElementById(inputId);
+  const drop  = document.getElementById(dropId);
+  let activeIdx = -1;
+
+  function showDrop(items) {
+    const q = input.value.trim();
+    drop.innerHTML = items.map((name, i) => {
+      const hi = name.replace(new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi'), '<mark>$1</mark>');
+      return `<div class="ac-item" data-val="${name}">${hi}</div>`;
+    }).join('');
+    drop.classList.toggle('open', items.length > 0);
+    activeIdx = -1;
+    drop.querySelectorAll('.ac-item').forEach(el => {
+      el.addEventListener('mousedown', e => {
+        e.preventDefault();
+        input.value = el.dataset.val;
+        drop.classList.remove('open');
+        tryAutoKm();
+      });
+    });
+  }
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toUpperCase();
+    if (!q) { drop.classList.remove('open'); return; }
+    const matches = STORE_NAMES.filter(n => n.toUpperCase().includes(q)).slice(0, 20);
+    showDrop(matches);
+  });
+
+  input.addEventListener('keydown', e => {
+    const items = drop.querySelectorAll('.ac-item');
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, items.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      input.value = items[activeIdx].dataset.val;
+      drop.classList.remove('open');
+      tryAutoKm();
+      return;
+    } else if (e.key === 'Escape') {
+      drop.classList.remove('open'); return;
+    }
+    items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+    if (activeIdx >= 0) items[activeIdx].scrollIntoView({ block: 'nearest' });
+  });
+
+  input.addEventListener('blur', () => setTimeout(() => drop.classList.remove('open'), 150));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initAC('txFrom', 'acFrom');
+  initAC('txTo',   'acTo');
+});
+</script>
 <script>
   App.setActiveNav();
 
@@ -477,6 +659,7 @@ var CONFIG = {
       document.getElementById('txTotal').value     = '';
       document.getElementById('txManualAmt').value = '';
       document.getElementById('txRemark').value    = '';
+      document.getElementById('autoKmBadge').style.display = 'none';
       document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
 
       App.toast('Entry added!', 'success');
