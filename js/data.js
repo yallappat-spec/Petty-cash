@@ -135,8 +135,9 @@ const DataManager = {
 
   async addTransaction(tx) {
     this._clearSession();
-    await this._post({ action: 'addTransaction', transaction: tx });
+    const res = await this._post({ action: 'addTransaction', transaction: tx });
     await this.refresh();
+    return res;
   },
 
   async approveTransaction(id, notes) {

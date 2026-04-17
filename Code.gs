@@ -149,9 +149,10 @@ function doPost(e) {
           const blob = Utilities.newBlob(decoded, tx.fileType || 'application/octet-stream', tx.fileName);
           const file = folder.createFile(blob);
           file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-          billUrl = file.getUrl();
+          const fileId = file.getId();
+          billUrl = 'https://drive.google.com/file/d/' + fileId + '/view';
         } catch(e) {
-          // non-fatal — save transaction without bill
+          result.billError = e.message;
         }
       }
 

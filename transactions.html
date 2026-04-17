@@ -430,8 +430,12 @@ var CONFIG = {
         tx.fileType = _billFile.type;
       }
 
-      await DataManager.addTransaction(tx);
-      App.toast('Submitted! Go to Approvals to review.', 'success');
+      const res = await DataManager.addTransaction(tx);
+      if (res && res.billError) {
+        App.toast('Submitted, but bill upload failed: ' + res.billError, 'warning');
+      } else {
+        App.toast('Submitted! Go to Approvals to review.', 'success');
+      }
 
       // Reset form
       document.getElementById('txAmount').value    = '';
