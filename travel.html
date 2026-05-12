@@ -433,8 +433,7 @@ function tryAutoKm() {
   const from = document.getElementById('txFrom').value.trim();
   const to   = document.getElementById('txTo').value.trim();
   if (!from || !to || from === to) { document.getElementById('autoKmBadge').style.display = 'none'; return; }
-  const key = from + '|||' + to;
-  const dist = STORE_DISTANCES[key];
+  const dist = STORE_DISTANCES[from + '|||' + to] ?? STORE_DISTANCES[to + '|||' + from];
   if (dist !== undefined) {
     document.getElementById('txKm').value = dist;
     document.getElementById('autoKmBadge').style.display = '';
