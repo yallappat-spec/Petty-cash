@@ -208,7 +208,9 @@ function doPost(e) {
       const now = new Date().toISOString();
       const km        = parseFloat(t.km)        || 0;
       const perKmRate = parseFloat(t.perKmRate) || 0;
-      const total     = parseFloat((km * perKmRate).toFixed(2));
+      const total     = t.mode === 'manual'
+        ? parseFloat(parseFloat(t.total || 0).toFixed(2))
+        : parseFloat((km * perKmRate).toFixed(2));
       travelSheet.appendRow([
         id, t.date, t.from, t.to,
         km, perKmRate, total,
