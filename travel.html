@@ -527,14 +527,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('selAuditor').innerHTML += `<option value="${a}">${a}</option>`;
   });
 
-  // After init, replace with sheet-managed list if configured
+  // After init, merge sheet auditors with defaults
   function populateAuditors() {
-    const auditors = DataManager.getAuditors();
-    if (!auditors.length) return;
-    const sel = document.getElementById('selAuditor');
+    const merged = [...new Set([...App.AUDITORS, ...DataManager.getAuditors()])];
+    if (!merged.length) return;
+    const sel  = document.getElementById('selAuditor');
     const prev = sel.value;
     sel.innerHTML = '<option value="">Select auditor…</option>';
-    auditors.forEach(a => sel.innerHTML += `<option value="${a}">${a}</option>`);
+    merged.forEach(a => sel.innerHTML += `<option value="${a}">${a}</option>`);
     if (prev) sel.value = prev;
   }
 

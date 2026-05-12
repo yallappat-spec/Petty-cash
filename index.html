@@ -336,8 +336,7 @@ var CONFIG = {
     const fund = DataManager.getData()?.fund || {};
     document.getElementById('settingsBalance').value = fund.initialBalance || 0;
     document.getElementById('settingsDept').value    = fund.departmentName || CONFIG.DEPARTMENT_NAME || '';
-    _auditors = DataManager.getAuditors().slice();
-    if (!_auditors.length) _auditors = App.AUDITORS.slice();
+    _auditors = [...new Set([...App.AUDITORS, ...DataManager.getAuditors()])];
     renderAuditorList();
     renderDistanceList();
     App.showModal('settingsModal');
