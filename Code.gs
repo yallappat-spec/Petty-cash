@@ -4,9 +4,10 @@
  * ============================================================
  */
 
-const TX_SHEET    = 'Transactions';
-const SET_SHEET   = 'Settings';
+const TX_SHEET     = 'Transactions';
+const SET_SHEET    = 'Settings';
 const TRAVEL_SHEET = 'TravelExpenses';
+const DIST_SHEET   = 'StoreDistances';
 
 const TX_COLS = [
   'id', 'type', 'amount', 'category', 'date',
@@ -21,11 +22,12 @@ const TRAVEL_COLS = [
   'remark', 'mode'
 ];
 
+const DIST_COLS = ['id', 'from', 'to', 'km'];
+
 // ── Sheet initialisation ─────────────────────────────────────
 function getSheets_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  // Transactions sheet
   let txSheet = ss.getSheetByName(TX_SHEET);
   if (!txSheet) {
     txSheet = ss.getSheetByName('Sheet1') || ss.insertSheet(TX_SHEET);
@@ -36,7 +38,6 @@ function getSheets_() {
     txSheet.setColumnWidth(6, 220);
   }
 
-  // Settings sheet
   let setSheet = ss.getSheetByName(SET_SHEET);
   if (!setSheet) {
     setSheet = ss.insertSheet(SET_SHEET);
@@ -47,18 +48,27 @@ function getSheets_() {
     setSheet.appendRow(['departmentName',  'My Department']);
   }
 
-  // Travel Expenses sheet
   let travelSheet = ss.getSheetByName(TRAVEL_SHEET);
   if (!travelSheet) {
     travelSheet = ss.insertSheet(TRAVEL_SHEET);
     travelSheet.appendRow(TRAVEL_COLS);
     styleHeader_(travelSheet, TRAVEL_COLS.length);
     travelSheet.setFrozenRows(1);
-    travelSheet.setColumnWidth(3, 160); // from
-    travelSheet.setColumnWidth(4, 160); // to
+    travelSheet.setColumnWidth(3, 160);
+    travelSheet.setColumnWidth(4, 160);
   }
 
-  return { txSheet, setSheet, travelSheet };
+  let distSheet = ss.getSheetByName(DIST_SHEET);
+  if (!distSheet) {
+    distSheet = ss.insertSheet(DIST_SHEET);
+    distSheet.appendRow(DIST_COLS);
+    styleHeader_(distSheet, DIST_COLS.length);
+    distSheet.setFrozenRows(1);
+    distSheet.setColumnWidth(2, 200);
+    distSheet.setColumnWidth(3, 200);
+  }
+
+  return { txSheet, setSheet, travelSheet, distSheet };
 }
 
 function styleHeader_(sheet, numCols) {
@@ -71,7 +81,7 @@ function styleHeader_(sheet, numCols) {
 // ── GET ──────────────────────────────────────────────────────
 function doGet(e) {
   try {
-    const { txSheet, setSheet, travelSheet } = getSheets_();
+    const { txSheet, setSheet, travelSheet, distSheet } = getSheets_();
 
     // Settings
     const setRows  = setSheet.getDataRange().getValues();
@@ -101,21 +111,35 @@ function doGet(e) {
       if (!row[0]) continue;
       const t = {};
       TRAVEL_COLS.forEach((col, j) => { t[col] = row[j] !== undefined ? row[j] : ''; });
-      t.km         = parseFloat(t.km)         || 0;
-      t.perKmRate  = parseFloat(t.perKmRate)  || 0;
-      t.total      = parseFloat(t.total)      || 0;
+      t.km        = parseFloat(t.km)        || 0;
+      t.perKmRate = parseFloat(t.perKmRate) || 0;
+      t.total     = parseFloat(t.total)     || 0;
       travelExpenses.push(t);
     }
     travelExpenses.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    // Store Distances
+    const distRows = distSheet.getDataRange().getValues();
+    const distances = [];
+    for (let i = 1; i < distRows.length; i++) {
+      const row = distRows[i];
+      if (!row[0]) continue;
+      const d = {};
+      DIST_COLS.forEach((col, j) => { d[col] = row[j] !== undefined ? row[j] : ''; });
+      d.km = parseFloat(d.km) || 0;
+      distances.push(d);
+    }
 
     return output_({
       fund: {
         initialBalance: parseFloat(settings.initialBalance) || 0,
         setupDone:      settings.setupDone === 'true' || settings.setupDone === true,
-        departmentName: settings.departmentName || 'My Department'
+        departmentName: settings.departmentName || 'My Department',
+        auditors:       settings.auditors || ''
       },
       transactions,
-      travelExpenses
+      travelExpenses,
+      distances
     });
 
   } catch (err) {
@@ -131,7 +155,7 @@ function doPost(e) {
   try {
     const body   = JSON.parse(e.postData.contents);
     const action = body.action;
-    const { txSheet, setSheet, travelSheet } = getSheets_();
+    const { txSheet, setSheet, travelSheet, distSheet } = getSheets_();
     let result = { success: true };
 
     // ── Add transaction ──────────────────────────────────────
@@ -140,17 +164,15 @@ function doPost(e) {
       const id  = Date.now().toString();
       const now = new Date().toISOString();
 
-      // Upload bill attachment to Google Drive if provided
       let billUrl = '';
       if (tx.fileData && tx.fileName) {
         try {
-          const folder = getOrCreateFolder_('PettyCash Bills');
+          const folder  = getOrCreateFolder_('PettyCash Bills');
           const decoded = Utilities.base64Decode(tx.fileData);
-          const blob = Utilities.newBlob(decoded, tx.fileType || 'application/octet-stream', tx.fileName);
-          const file = folder.createFile(blob);
+          const blob    = Utilities.newBlob(decoded, tx.fileType || 'application/octet-stream', tx.fileName);
+          const file    = folder.createFile(blob);
           file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-          const fileId = file.getId();
-          billUrl = 'https://drive.google.com/file/d/' + fileId + '/view';
+          billUrl = 'https://drive.google.com/file/d/' + file.getId() + '/view';
         } catch(e) {
           result.billError = e.message;
         }
@@ -184,9 +206,9 @@ function doPost(e) {
       const t   = body.expense;
       const id  = Date.now().toString();
       const now = new Date().toISOString();
-      const km         = parseFloat(t.km)        || 0;
-      const perKmRate  = parseFloat(t.perKmRate) || 0;
-      const total      = parseFloat((km * perKmRate).toFixed(2));
+      const km        = parseFloat(t.km)        || 0;
+      const perKmRate = parseFloat(t.perKmRate) || 0;
+      const total     = parseFloat((km * perKmRate).toFixed(2));
       travelSheet.appendRow([
         id, t.date, t.from, t.to,
         km, perKmRate, total,
@@ -201,6 +223,19 @@ function doPost(e) {
     // ── Delete Travel Expense ────────────────────────────────
     else if (action === 'deleteTravelExpense') {
       deleteRow_(travelSheet, body.id);
+    }
+
+    // ── Add Store Distance ───────────────────────────────────
+    else if (action === 'addStoreDistance') {
+      const d  = body.distance;
+      const id = Date.now().toString();
+      distSheet.appendRow([id, d.from.trim(), d.to.trim(), parseFloat(d.km) || 0]);
+      result.id = id;
+    }
+
+    // ── Delete Store Distance ────────────────────────────────
+    else if (action === 'deleteStoreDistance') {
+      deleteRow_(distSheet, body.id);
     }
 
     // ── Update Settings ──────────────────────────────────────
@@ -260,4 +295,10 @@ function deleteRow_(sheet, id) {
 function getOrCreateFolder_(name) {
   const folders = DriveApp.getFoldersByName(name);
   return folders.hasNext() ? folders.next() : DriveApp.createFolder(name);
+}
+
+// ── Test Drive Authorization ─────────────────────────────────
+function testDriveAccess() {
+  const folder = getOrCreateFolder_('PettyCash Bills');
+  Logger.log('Folder ID: ' + folder.getId());
 }

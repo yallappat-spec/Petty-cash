@@ -158,13 +158,16 @@
 
 <!-- ── Settings Modal ── -->
 <div class="modal fade" id="settingsModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="fas fa-gear text-primary me-2"></i>Settings</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body p-4">
+      <div class="modal-body p-4" style="max-height:80vh;overflow-y:auto">
+
+        <!-- General -->
+        <div class="fw-semibold mb-3" style="font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">General</div>
         <div class="mb-3">
           <label class="form-label">Department Name</label>
           <input type="text" class="form-control" id="settingsDept" maxlength="60" />
@@ -177,11 +180,42 @@
           </div>
           <div class="form-text">Starting fund before any transactions.</div>
         </div>
+
         <hr />
-        <div class="fw-semibold mb-2" style="font-size:13px">Google Sheets Link</div>
-        <a id="sheetLink" href="#" target="_blank" class="btn btn-outline btn-sm" style="display:none">
-          <i class="fas fa-table-cells me-1"></i>Open Backup Sheet
-        </a>
+
+        <!-- Auditors -->
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <div class="fw-semibold" style="font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Auditors</div>
+        </div>
+        <div id="auditorList" class="mb-2" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+        <div class="d-flex gap-2 mt-2">
+          <input type="text" class="form-control form-control-sm" id="newAuditorInput" placeholder="Auditor name" maxlength="50" style="max-width:200px" />
+          <button class="btn btn-outline btn-sm" onclick="addAuditor()"><i class="fas fa-plus me-1"></i>Add</button>
+        </div>
+
+        <hr />
+
+        <!-- Store Distances -->
+        <div class="fw-semibold mb-2" style="font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Store Distances</div>
+        <div class="form-text mb-2">Add new store pairs here. These are saved to Google Sheets and auto-populate KM in Petrol Expenses.</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;font-size:13px">
+            <thead><tr style="background:#f1f5f9">
+              <th style="padding:6px 10px">From</th>
+              <th style="padding:6px 10px">To</th>
+              <th style="padding:6px 10px;text-align:right">KM</th>
+              <th style="padding:6px 10px"></th>
+            </tr></thead>
+            <tbody id="distanceList"></tbody>
+          </table>
+        </div>
+        <div class="d-flex gap-2 mt-3 flex-wrap">
+          <input type="text" class="form-control form-control-sm" id="newDistFrom" placeholder="From store" style="max-width:180px" />
+          <input type="text" class="form-control form-control-sm" id="newDistTo"   placeholder="To store"   style="max-width:180px" />
+          <input type="number" class="form-control form-control-sm" id="newDistKm" placeholder="KM" min="0" step="0.1" style="max-width:80px" />
+          <button class="btn btn-outline btn-sm" onclick="addDistance()"><i class="fas fa-plus me-1"></i>Add</button>
+        </div>
+
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
@@ -296,11 +330,87 @@ var CONFIG = {
   }
 
   // ── Settings ──────────────────────────────────────────────
+  let _auditors = [];
+
   function openSettings() {
     const fund = DataManager.getData()?.fund || {};
     document.getElementById('settingsBalance').value = fund.initialBalance || 0;
     document.getElementById('settingsDept').value    = fund.departmentName || CONFIG.DEPARTMENT_NAME || '';
+    _auditors = DataManager.getAuditors().slice();
+    renderAuditorList();
+    renderDistanceList();
     App.showModal('settingsModal');
+  }
+
+  function renderAuditorList() {
+    document.getElementById('auditorList').innerHTML = _auditors.map((a, i) =>
+      `<span style="display:inline-flex;align-items:center;gap:4px;background:#e2e8f0;border-radius:20px;padding:3px 10px;font-size:13px">
+        ${a}
+        <button onclick="removeAuditor(${i})" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:12px;padding:0 2px" title="Remove">×</button>
+      </span>`
+    ).join('');
+  }
+
+  function addAuditor() {
+    const input = document.getElementById('newAuditorInput');
+    const name  = input.value.trim();
+    if (!name) return;
+    if (_auditors.includes(name)) { App.toast('Auditor already exists.', 'warning'); return; }
+    _auditors.push(name);
+    input.value = '';
+    renderAuditorList();
+  }
+
+  function removeAuditor(idx) {
+    _auditors.splice(idx, 1);
+    renderAuditorList();
+  }
+
+  function renderDistanceList() {
+    const dists = DataManager.getStoreDistances();
+    const tbody = document.getElementById('distanceList');
+    if (!dists.length) {
+      tbody.innerHTML = `<tr><td colspan="4" style="padding:10px;color:var(--muted);text-align:center">No custom distances added yet.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = dists.map(d =>
+      `<tr style="border-bottom:1px solid #f1f5f9">
+        <td style="padding:6px 10px">${d.from}</td>
+        <td style="padding:6px 10px">${d.to}</td>
+        <td style="padding:6px 10px;text-align:right">${d.km}</td>
+        <td style="padding:6px 10px;text-align:center">
+          <button onclick="removeDistance('${d.id}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:14px" title="Delete"><i class="fas fa-trash"></i></button>
+        </td>
+      </tr>`
+    ).join('');
+  }
+
+  async function addDistance() {
+    const from = document.getElementById('newDistFrom').value.trim().toUpperCase();
+    const to   = document.getElementById('newDistTo').value.trim().toUpperCase();
+    const km   = parseFloat(document.getElementById('newDistKm').value);
+    if (!from || !to || isNaN(km) || km <= 0) { App.toast('Fill in From, To and KM.', 'warning'); return; }
+    try {
+      await DataManager.addStoreDistance({ from, to, km });
+      document.getElementById('newDistFrom').value = '';
+      document.getElementById('newDistTo').value   = '';
+      document.getElementById('newDistKm').value   = '';
+      renderDistanceList();
+      App.toast(`Added: ${from} ↔ ${to} (${km} km)`);
+    } catch (e) {
+      App.toast('Error: ' + e.message, 'error');
+    }
+  }
+
+  async function removeDistance(id) {
+    if (!confirm('Remove this distance?')) return;
+    try {
+      await DataManager.deleteStoreDistance(id);
+      renderDistanceList();
+      App.toast('Distance removed.');
+    } catch (e) {
+      App.toast('Error: ' + e.message, 'error');
+    }
   }
 
   async function saveSettings() {
@@ -314,7 +424,8 @@ var CONFIG = {
       await DataManager.updateSettings({
         initialBalance: String(bal),
         departmentName: dept || 'My Department',
-        setupDone: 'true'
+        setupDone:      'true',
+        auditors:       _auditors.join(',')
       });
       App.hideModal('settingsModal');
       renderDashboard();

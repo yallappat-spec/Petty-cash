@@ -172,6 +172,34 @@ const DataManager = {
     await this.updateSettings({ initialBalance: String(amount) });
   },
 
+  // ── Auditors & Store Distances ───────────────────────────────
+
+  getAuditors() {
+    const saved = (this._cache?.fund?.auditors || '').split(',').map(s => s.trim()).filter(Boolean);
+    return saved.length ? saved : (window.App?.AUDITORS || []);
+  },
+
+  getStoreDistances() {
+    return this._cache?.distances || [];
+  },
+
+  async saveAuditors(list) {
+    await this.updateSettings({ auditors: list.join(',') });
+  },
+
+  async addStoreDistance(distance) {
+    this._clearSession();
+    const res = await this._post({ action: 'addStoreDistance', distance });
+    await this.refresh();
+    return res;
+  },
+
+  async deleteStoreDistance(id) {
+    this._clearSession();
+    await this._post({ action: 'deleteStoreDistance', id });
+    await this.refresh();
+  },
+
   // ── Export ───────────────────────────────────────────────────
 
   exportCSV(transactions) {

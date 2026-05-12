@@ -522,10 +522,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const MONTHS = ['','January','February','March','April','May','June',
                   'July','August','September','October','November','December'];
 
-  // Populate auditor dropdown
-  App.AUDITORS.forEach(a => {
-    document.getElementById('selAuditor').innerHTML += `<option value="${a}">${a}</option>`;
-  });
+  function populateAuditors() {
+    const auditors = DataManager.getAuditors();
+    const sel = document.getElementById('selAuditor');
+    sel.innerHTML = '<option value="">Select auditor…</option>';
+    auditors.forEach(a => sel.innerHTML += `<option value="${a}">${a}</option>`);
+  }
+
+  populateAuditors();
 
   // Populate year dropdown (5 years back + 2 ahead)
   const yearSel = document.getElementById('selYear');
@@ -547,6 +551,20 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('deptName').textContent =
         DataManager.getData()?.fund?.departmentName || CONFIG.DEPARTMENT_NAME;
       App.updatePendingBadge();
+
+      // Merge sheet distances on top of hardcoded table
+      DataManager.getStoreDistances().forEach(d => {
+        if (!d.from || !d.to || !d.km) return;
+        STORE_DISTANCES[d.from + '|||' + d.to] = d.km;
+        STORE_DISTANCES[d.to + '|||' + d.from] = d.km;
+        STORE_NAMES.push(d.from, d.to);
+      });
+      const _unique = [...new Set(STORE_NAMES)].sort();
+      STORE_NAMES.length = 0;
+      STORE_NAMES.push(..._unique);
+
+      // Re-populate auditors from DataManager (uses sheet list if configured)
+      populateAuditors();
     } catch (e) {
       App.hideLoader();
       App.showError('Could not load data: ' + e.message);
