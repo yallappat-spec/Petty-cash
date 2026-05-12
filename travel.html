@@ -522,14 +522,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const MONTHS = ['','January','February','March','April','May','June',
                   'July','August','September','October','November','December'];
 
+  // Initial population with hardcoded list (instant, no network)
+  App.AUDITORS.forEach(a => {
+    document.getElementById('selAuditor').innerHTML += `<option value="${a}">${a}</option>`;
+  });
+
+  // After init, replace with sheet-managed list if configured
   function populateAuditors() {
     const auditors = DataManager.getAuditors();
+    if (!auditors.length) return;
     const sel = document.getElementById('selAuditor');
+    const prev = sel.value;
     sel.innerHTML = '<option value="">Select auditor…</option>';
     auditors.forEach(a => sel.innerHTML += `<option value="${a}">${a}</option>`);
+    if (prev) sel.value = prev;
   }
-
-  populateAuditors();
 
   // Populate year dropdown (5 years back + 2 ahead)
   const yearSel = document.getElementById('selYear');

@@ -175,8 +175,9 @@ const DataManager = {
   // ── Auditors & Store Distances ───────────────────────────────
 
   getAuditors() {
-    const saved = (this._cache?.fund?.auditors || '').split(',').map(s => s.trim()).filter(Boolean);
-    return saved.length ? saved : (window.App?.AUDITORS || []);
+    if (!this._cache) return [];
+    const saved = (this._cache.fund?.auditors || '').split(',').map(s => s.trim()).filter(Boolean);
+    return saved;
   },
 
   getStoreDistances() {
