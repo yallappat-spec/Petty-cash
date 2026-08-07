@@ -420,8 +420,11 @@ var CONFIG = {
     const totalKm  = txs.reduce((s, t) => s + t.km, 0);
     const totalAmt = txs.reduce((s, t) => s + t.total, 0);
 
-    // Sort by date ascending for printing
-    const sorted = [...txs].sort((a, b) => a.date > b.date ? 1 : -1);
+    // Sort by date ascending, then by creation order
+    const sorted = [...txs].sort((a, b) => {
+      if (a.date !== b.date) return a.date > b.date ? 1 : -1;
+      return new Date(a.createdAt) - new Date(b.createdAt);
+    });
 
     document.getElementById('detailTbody').innerHTML = sorted.map(t => `
       <tr>
@@ -451,7 +454,10 @@ var CONFIG = {
     if (!txs.length) { App.toast('No data to export.', 'warning'); return; }
 
     const headers = ['Date','Auditor','From','To','KM','Per KM Rate (₹)','Total (₹)','Month','Year','Submitted By'];
-    const sorted = [...txs].sort((a, b) => a.date > b.date ? 1 : -1);
+    const sorted = [...txs].sort((a, b) => {
+      if (a.date !== b.date) return a.date > b.date ? 1 : -1;
+      return new Date(a.createdAt) - new Date(b.createdAt);
+    });
     const rows = sorted.map(t => [
       t.date, t.auditor, `"${t.from}"`, `"${t.to}"`,
       t.km, t.perKmRate, t.total,
