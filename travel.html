@@ -165,6 +165,28 @@
       <button class="btn btn-outline btn-sm ms-3" onclick="clearSession()"><i class="fas fa-pen me-1"></i>Change</button>
     </div>
 
+    <!-- Bulk Upload Section -->
+    <div class="card mb-4 p-4" style="background:linear-gradient(135deg,#f0fdf4,#dbeafe);border:1px solid #bbf7d0">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <h6 class="fw-semibold mb-1"><i class="fas fa-file-upload me-2 text-success"></i>Bulk Upload Entries</h6>
+          <p class="text-muted mb-0" style="font-size:12px">Upload a CSV file with travel data based on attendance</p>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <a href="javascript:downloadTemplate()" class="btn btn-outline btn-sm"><i class="fas fa-download me-1"></i>Template</a>
+          <label class="btn btn-success btn-sm mb-0"><i class="fas fa-folder-open me-1"></i>Choose File
+            <input type="file" id="bulkFile" accept=".csv,.xlsx" style="display:none" onchange="handleBulkUpload()" />
+          </label>
+        </div>
+      </div>
+      <div id="uploadProgress" style="display:none;margin-top:12px">
+        <div class="progress">
+          <div class="progress-bar bg-success" id="uploadBar" style="width:0%"></div>
+        </div>
+        <p class="text-muted mt-2 mb-0" id="uploadStatus" style="font-size:12px">Processing...</p>
+      </div>
+    </div>
+
     <div class="row g-4">
 
       <!-- Add Entry Form -->
@@ -636,6 +658,140 @@ document.addEventListener('DOMContentLoaded', () => {
   function clearSession() {
     document.getElementById('entrySection').classList.remove('visible');
     session = { month: null, year: null, auditor: '', rate: 7, monthName: '' };
+  }
+
+  // ── Bulk Upload ───────────────────────────────────────────
+  function downloadTemplate() {
+    const csv = 'Date,Employee Name,From,To,KM,Remark\n02-Jun-26,Ganesh,BLR - 4TH BLOCK JAYANAGAR,BLR - FORUM SOUTH BANGALORE,6.8,Client visit\n';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'travel-upload-template.csv';
+    link.click();
+  }
+
+  async function handleBulkUpload() {
+    const fileInput = document.getElementById('bulkFile');
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const csv = e.target.result;
+        const lines = csv.trim().split('\n');
+        const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+
+        if (lines.length < 2) { App.toast('No data rows found', 'warning'); return; }
+
+        const dateIdx = headers.indexOf('date');
+        const nameIdx = headers.indexOf('employee name');
+        const fromIdx = headers.indexOf('from');
+        const toIdx = headers.indexOf('to');
+        const kmIdx = headers.indexOf('km');
+        const remarkIdx = headers.indexOf('remark');
+
+        if (dateIdx < 0 || fromIdx < 0 || toIdx < 0) {
+          App.toast('Missing required columns: Date, From, To', 'error'); return;
+        }
+
+        const entries = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cells = lines[i].split(',').map(c => c.trim());
+          if (!cells[dateIdx]) continue;
+
+          entries.push({
+            date: parseBulkDate(cells[dateIdx]),
+            from: cells[fromIdx] || '',
+            to: cells[toIdx] || '',
+            km: parseFloat(cells[kmIdx]) || 0,
+            remark: cells[remarkIdx] || ''
+          });
+        }
+
+        if (!entries.length) { App.toast('No valid entries found', 'warning'); return; }
+
+        // Show progress
+        document.getElementById('uploadProgress').style.display = 'block';
+        const progressBar = document.getElementById('uploadBar');
+        const statusText = document.getElementById('uploadStatus');
+
+        // Upload entries
+        let success = 0, failed = 0;
+        for (let i = 0; i < entries.length; i++) {
+          try {
+            const entry = entries[i];
+            const km = entry.km || (STORE_DISTANCES[`${entry.from}|||${entry.to}`] || 0);
+
+            await addBulkEntry({
+              date: entry.date,
+              from: entry.from,
+              to: entry.to,
+              km: km,
+              perKmRate: session.rate,
+              total: (km * session.rate).toFixed(2),
+              remark: entry.remark
+            });
+            success++;
+          } catch (err) {
+            failed++;
+            console.error('Entry failed:', err);
+          }
+
+          const progress = ((i + 1) / entries.length) * 100;
+          progressBar.style.width = progress + '%';
+          statusText.innerHTML = `Processing... ${i + 1}/${entries.length}`;
+        }
+
+        document.getElementById('uploadProgress').style.display = 'none';
+        fileInput.value = '';
+
+        renderTable();
+        App.toast(`Uploaded ${success} entries${failed ? `, ${failed} failed` : ''}.`, success > 0 ? 'success' : 'error');
+      } catch (err) {
+        App.toast('Upload error: ' + err.message, 'error');
+        document.getElementById('uploadProgress').style.display = 'none';
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function parseBulkDate(dateStr) {
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0]);
+        const month = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].indexOf(parts[1].toLowerCase()) + 1;
+        const year = 2000 + parseInt(parts[2]);
+        return new Date(year, month - 1, day).toISOString().split('T')[0];
+      }
+      return new Date(dateStr).toISOString().split('T')[0];
+    } catch { return new Date().toISOString().split('T')[0]; }
+  }
+
+  async function addBulkEntry(entry) {
+    if (!session.month || !session.auditor) throw new Error('Session not selected');
+
+    const expense = {
+      date: entry.date,
+      from: entry.from,
+      to: entry.to,
+      km: entry.km,
+      perKmRate: entry.perKmRate,
+      total: entry.total,
+      month: session.month,
+      year: session.year,
+      auditor: session.auditor,
+      submittedBy: DataManager.getData()?.fund?.departmentName || CONFIG.DEPARTMENT_NAME,
+      remark: entry.remark || '',
+      mode: 'km'
+    };
+
+    const sessionData = session.sessionData || [];
+    sessionData.push(expense);
+    session.sessionData = sessionData;
+
+    await DataManager._post({ action: 'addTravelExpense', expense });
   }
 
   // ── Calc total ────────────────────────────────────────────
