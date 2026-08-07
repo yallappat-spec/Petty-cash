@@ -420,10 +420,12 @@ var CONFIG = {
     const totalKm  = txs.reduce((s, t) => s + t.km, 0);
     const totalAmt = txs.reduce((s, t) => s + t.total, 0);
 
-    // Sort by date ascending, then by creation order
+    // Sort by date ascending, then by creation order (id is timestamp as fallback)
     const sorted = [...txs].sort((a, b) => {
       if (a.date !== b.date) return a.date > b.date ? 1 : -1;
-      return new Date(a.createdAt) - new Date(b.createdAt);
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : parseInt(a.id);
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : parseInt(b.id);
+      return aTime - bTime;
     });
 
     document.getElementById('detailTbody').innerHTML = sorted.map(t => `
@@ -456,7 +458,9 @@ var CONFIG = {
     const headers = ['Date','Auditor','From','To','KM','Per KM Rate (₹)','Total (₹)','Month','Year','Submitted By'];
     const sorted = [...txs].sort((a, b) => {
       if (a.date !== b.date) return a.date > b.date ? 1 : -1;
-      return new Date(a.createdAt) - new Date(b.createdAt);
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : parseInt(a.id);
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : parseInt(b.id);
+      return aTime - bTime;
     });
     const rows = sorted.map(t => [
       t.date, t.auditor, `"${t.from}"`, `"${t.to}"`,
