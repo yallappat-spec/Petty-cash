@@ -451,7 +451,8 @@ var CONFIG = {
     if (!txs.length) { App.toast('No data to export.', 'warning'); return; }
 
     const headers = ['Date','Auditor','From','To','KM','Per KM Rate (₹)','Total (₹)','Month','Year','Submitted By'];
-    const rows = txs.map(t => [
+    const sorted = [...txs].sort((a, b) => a.date > b.date ? 1 : -1);
+    const rows = sorted.map(t => [
       t.date, t.auditor, `"${t.from}"`, `"${t.to}"`,
       t.km, t.perKmRate, t.total,
       MONTHS[parseInt(t.month)] || t.month, t.year,
